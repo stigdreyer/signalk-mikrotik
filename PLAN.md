@@ -64,9 +64,14 @@ Documentation for every user, tried out on the pilot boat.
 ## Phase 1: the switch (MVP)
 
 > **Status:** code and tests done (15 tests against a fake RouterOS server).
-> Not yet run against a real router. Still open: the user-policy check in
-> preflight, and the "Check router" / "Remove from router" buttons, which come
-> with the Phase 3 webapp and are REST endpoints for now.
+> Pilot on a hAP ax S running RouterOS 7.25 (2026-11-03): install, metered,
+> offline and back to normal all pass. `place-before` and the bulk connection
+> remove work over REST, and the user needs the `api` policy as well as
+> `rest-api`. The Signal K restart test exposed an upstream gap: signalk-internet
+> didn't persist its override, now fixed on a local branch there. Still open:
+> the removal test, the user-policy check in preflight, and the
+> "Check router" / "Remove from router" buttons, which come with the Phase 2
+> webapp and are REST endpoints for now.
 
 The goal is that `metered` locks the router and `online` unlocks it. Only the
 base list is allowed.
@@ -115,7 +120,54 @@ fails, messaging works, the Starlink app can open Data Usage, and Signal K
 still sees the dish. Then set Online and check everything works again. Run
 Remove and verify that nothing tagged is left.
 
-## Phase 2: curated profiles
+## Phase 2: data usage dashboard
+
+The goal is to see how much data went over the uplink per day, split into
+normal and metered. That makes Starlink's own figures (Roam vs Ocean Mode) easy
+to check. It doesn't depend on profiles or traffic learning, so it comes first
+and brings the webapp with it.
+
+- **Counter collector:** every 60 s, read `rx-byte` / `tx-byte` of every member
+  of the WAN interface list (`/interface` by name). Add the change since the
+  last reading to the current day's bucket, labelled `normal` or `metered` by
+  the router profile active at that moment.
+  - **Counter reset** (router reboot, `reset-counters`): a reading lower than
+    the last one counts from zero. The bytes between the last reading and the
+    reset are lost.
+  - **Plugin or HALPI2 down:** the router keeps counting, and the gap is
+    booked to the day and profile of the first reading after restart.
+- **Days in UTC**, like Starlink, so our days line up with theirs.
+- **Storage:** one small JSON file in the plugin data directory, one entry per
+  UTC day: `{ normal: { rx, tx }, metered: { rx, tx } }`. A year is a few
+  hundred entries, so there's no database and no pruning needed.
+- **Signal K paths:**
+  - `network.mikrotik.usage.today.{normal,metered}` (bytes)
+  - `network.mikrotik.usage.wan.{received,sent}` (bytes, running totals)
+
+  These let KIP, Home Assistant or a history plugin (QuestDB, Grafana) use the
+  same data.
+- **Config:** price per metered GB and currency (e.g. `4.39` `FJD`), for the
+  cost estimate. GB means 10⁹ bytes, like Starlink's.
+- **Webapp, first page** (`public/`, plain web components like
+  signalk-internet):
+  - daily bars stacked normal/metered, one tab per month
+  - period totals for normal and metered, plus the estimated metered cost
+  - a day tooltip like Starlink's: normal GB, metered GB
+  - current profile and router preflight results
+  - a note that bytes are counted at the router, so they include Ethernet
+    overhead and the router's own traffic but not the dish's own traffic
+- **REST endpoint:** `GET /usage?from=&to=` returns the daily buckets
+  (read-only).
+- **Tests:**
+  - collector against the fake router: counter growth, reset, profile switch
+    in the middle of a day, UTC day boundary
+  - storage round trip
+
+**Pilot test:** run it for a week alongside Starlink's Data Usage page and
+compare per day. A few percent difference is expected; a consistent large gap
+is worth raising with Starlink.
+
+## Phase 3: curated profiles
 
 - `profiles/*.json`, one file per profile (weather, messaging, email,
   tracking): name, description, list of FQDNs, notes on known gaps.
@@ -129,7 +181,7 @@ Remove and verify that nothing tagged is left.
   fall back to plain FQDN address-list entries (no subdomains), with a
   warning.
 
-## Phase 3: traffic monitor and webapp
+## Phase 4: traffic monitor
 
 - **Collector:** every 30 s, read:
   - `/ip/dns/cache`: domain → IP
@@ -144,9 +196,8 @@ Remove and verify that nothing tagged is left.
   Traffic Flow (IPFIX) export if the numbers look too low.`
 - If clients don't use router DNS, the webapp says so instead of showing an
   empty or misleading log.
-- **Webapp** (`public/`, plain web components like signalk-internet):
-  - router preflight results
-  - current profile and active lists
+- **Webapp, second page** (next to the Phase 2 usage dashboard):
+  - active lists
   - top domains by bytes, filterable by device
   - an "allow while metered" toggle per domain, which becomes a learned entry
   - an "export as profile" action that produces JSON ready to contribute
@@ -158,7 +209,7 @@ Remove and verify that nothing tagged is left.
 apps, then review the log. The real Starlink app hosts found this way go into
 the Starlink preset.
 
-## Phase 4: publish
+## Phase 5: publish
 
 - Public GitHub repo `stigdreyer/signalk-mikrotik`, CI running `npm test` on
   Node 20 and 22.
@@ -175,9 +226,9 @@ the Starlink preset.
 
 ## Open questions
 
-1. **Connection flush over REST:** listing and deleting thousands of IDs is
-   slow. Check whether `/rest/execute` with
-   `/ip firewall connection remove [find]` works, and from which version.
+1. ~~**Connection flush over REST**~~: answered in the pilot. The bulk
+   `remove` with a comma-separated `.id` list works on RouterOS 7.25. Its
+   speed with thousands of connections is still untested.
 2. **Minimum RouterOS version:** the REST API needs v7. Settle the floor once
    the optional features are probed (likely 7.1 for the core, newer for
    subdomain matching).
@@ -190,5 +241,6 @@ the Starlink preset.
 
 ## Out of scope (agreed)
 
-Notifications, debounce, per-device rules, data quota/budget, SSH transport,
-using spidgrou's `.rsc` scripts.
+Notifications, debounce, per-device rules, data quota alerts (usage is tracked
+and shown, see Phase 2, but nothing acts on it), SSH transport, using
+spidgrou's `.rsc` scripts.

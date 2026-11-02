@@ -1,9 +1,9 @@
 # signalk-mikrotik
 
 > **Status: early development.** Phase 1 (the profile switch) is implemented
-> and tested against a simulated router only. It hasn't run on a real MikroTik
-> yet. Curated profiles, the traffic monitor and the webapp are still to come
-> (see [PLAN.md](PLAN.md)).
+> and has been piloted on one router (hAP ax S, RouterOS 7.25). Still to come
+> (see [PLAN.md](PLAN.md)): a data usage dashboard, curated profiles and the
+> traffic monitor.
 
 A Signal K plugin that switches a **MikroTik** router between a **normal** and a
 **metered** firewall profile, following the internet state published by
@@ -153,8 +153,9 @@ The router's own traffic (output chain) isn't touched.
 - **RouterOS v7** with the REST API enabled (`www-ssl` recommended). The exact
   minimum version is still to be settled. Optional features, such as subdomain
   matching, are detected and switched off with a warning on older versions.
-- **A dedicated router user** for the plugin, with only `read`, `write` and
-  `rest-api` policies
+- **A dedicated router user** for the plugin, with only the `read`, `write`, `api` and
+  `rest-api` policies (REST on RouterOS 7.25 refuses commands with "not
+  allowed (9)" without `api`)
 - **A WAN interface list** (name configurable) containing the metered uplink.
   For Starlink, use bypass mode so the dish connects straight to the
   MikroTik.
@@ -178,6 +179,7 @@ Step-by-step router setup: `docs/router-setup.md` (planned).
 | Profiles | Curated profiles to enable while metered |
 | Learned entries | Managed in the webapp |
 | Traffic log retention | Default 14 days |
+| Price per metered GB, currency | For the cost estimate on the usage dashboard |
 
 ## Known limitations
 

@@ -41,13 +41,19 @@ In the plugin config, keep **Accept self-signed router certificate** on.
 ## 2. A dedicated user for the plugin
 
 Don't give the plugin your admin account. Create a group with only the
-permissions it needs (*verify*: the `rest-api` policy name), and a user that
-can only log in from your Signal K server:
+permissions it needs (`rest-api` alone is not enough: without `api`,
+RouterOS 7.25 answers REST calls with "not allowed (9)"), and a user that can only log in from your Signal K
+server. Give the server a static DHCP lease first, so the restriction keeps
+working:
 
 ```routeros
-/user group add name=signalk policy=read,write,rest-api
+/ip dhcp-server lease make-static [find address=<signalk-server-ip>]
+/user group add name=signalk policy=read,write,api,rest-api
 /user add name=signalk group=signalk password=<long-random-password> address=<signalk-server-ip>/32
 ```
+
+Recent RouterOS versions print a deprecation warning for the user's `address`
+setting. The user is still created and the restriction applies.
 
 Check that it works from the Signal K server:
 
