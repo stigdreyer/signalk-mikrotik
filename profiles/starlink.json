@@ -1,0 +1,8 @@
+{
+  "name": "Starlink",
+  "description": "Starlink app cloud (account, subscription, data usage). The dish subnet comes from the plugin config. Unverified: capture the app's real hosts with the traffic monitor.",
+  "hosts": [
+    "starlink.com",
+    "api.starlink.com"
+  ]
+}

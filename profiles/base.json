@@ -1,0 +1,11 @@
+{
+  "name": "Base",
+  "description": "Always allowed while metered: time sync and the signalk-internet connectivity probes. Safety comms still to be decided (PLAN open question 3).",
+  "hosts": [
+    "pool.ntp.org",
+    "time.google.com",
+    "time.apple.com",
+    "captive.apple.com",
+    "connectivitycheck.gstatic.com"
+  ]
+}
