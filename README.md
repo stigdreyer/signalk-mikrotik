@@ -129,9 +129,13 @@ Until the webapp exists, the checks are also available over REST (admin only):
 - `GET /plugins/signalk-mikrotik/preflight` runs the checks again.
 - `POST /plugins/signalk-mikrotik/remove` deletes every tagged object.
 
-- **Address-list** `skm-metered`: the FQDNs of the active lists. Subdomains are
-  matched with DNS `FWD` static entries using `match-subdomain` plus
-  `address-list`.
+- **Address-list** `skm-metered`: the hostnames and subnets of the active
+  lists.
+- **DNS `FWD` static entries**, one per hostname, with `match-subdomain` and
+  `address-list=skm-metered`. Every IP the router hands out for an allowed
+  domain or its subdomains joins the list, so the firewall allows the same
+  CDN addresses your devices were given. They forward to the router's own
+  upstream server and are enabled only while metered.
 - **Forward-chain rules** at the top of the chain, so they run before
   defconf fasttrack:
   - accept to `skm-metered`
@@ -139,8 +143,11 @@ Until the webapp exists, the checks are also available over REST (admin only):
   - drop `out-interface-list=WAN`
 
   The drop rule is enabled only while metered.
-- **DNS:** while metered, port 53 from LAN is redirected to the router, so
-  hard-coded resolvers can't bypass the list.
+- **DNS redirect** (on by default): while metered, port 53 from LAN goes to
+  the router, whatever server a device asks. That's what makes the `FWD`
+  entries see every lookup, and hard-coded resolvers can't bypass the list.
+  Turned off, DNS to any server stays allowed and only devices that already
+  use the router get matching IPs.
 - **IPv6:** if IPv6 is enabled, all IPv6 forwarded to WAN is dropped while
   metered.
 - **Connection flush** on the switch to metered, so streams and downloads that
@@ -159,14 +166,14 @@ The router's own traffic (output chain) isn't touched.
 - **A WAN interface list** (name configurable) containing the metered uplink.
   For Starlink, use bypass mode so the dish connects straight to the
   MikroTik.
-- **The router as DNS server for LAN clients.** Domain-based allowlisting and
-  the traffic monitor both depend on clients resolving through the router.
-  Before switching, check with `dig @<router>` that replies include EDNS,
-  because some clients reject replies without it.
+- **Router DNS that works for your clients** while metered (the redirect
+  sends them all there): `allow-remote-requests=yes`, an IPv4 upstream that
+  handles large answers, and `address-list-extra-time` above zero. See
+  [router-setup.md](docs/router-setup.md#4-router-dns).
 - **signalk-internet**. signalk-starlink-offshore is optional and provides
   the high-seas backstop.
 
-Step-by-step router setup: `docs/router-setup.md` (planned).
+Step-by-step router setup: [docs/router-setup.md](docs/router-setup.md).
 
 ## Configuration (planned)
 
@@ -186,6 +193,10 @@ Step-by-step router setup: `docs/router-setup.md` (planned).
 - **Domains become IPs.** The router allows by IP, so a whitelisted domain on a
   shared CDN or cloud also opens everything else behind those IPs. Allowing
   Gmail effectively opens most of Google, and the same goes for Microsoft.
+- **RouterOS compresses SRV answers**, which RFC 2782 forbids. Strict
+  resolvers (c-ares 1.34.8, e.g. Music Assistant's radio search) reject them
+  while metered. Normal mode isn't affected when DHCP hands out a public
+  resolver first.
 - **DNS over HTTPS** in browsers bypasses the router's DNS. It is blocked while
   metered unless its provider's IPs happen to be allowed, and in that case
   those clients' domains don't show up in the traffic monitor.

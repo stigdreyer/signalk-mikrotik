@@ -20,7 +20,8 @@ const schema = {
     redirectDns: {
       type: "boolean",
       title: "Redirect LAN DNS to the router while metered",
-      description: "Stops devices with hard-coded DNS servers from bypassing the allowlist. Needs /ip dns allow-remote-requests=yes.",
+      description:
+        "Sends every DNS query to the router while metered, so the IPs devices get for allowed domains are the ones in the allowlist, and hard-coded DNS servers can't bypass it. Needs /ip dns allow-remote-requests=yes.",
       default: true,
     },
     starlink: {
@@ -81,7 +82,7 @@ module.exports = (app) => {
         if (check.errors.length) throw new Error(check.errors.join("; "));
         // Keep whatever profile the router has until signalk-internet says otherwise.
         const profile = (await router.currentProfile(client)) || "normal";
-        await router.install(client, cfg, hostsFor(cfg), profile, check.ipv6);
+        await router.install(client, cfg, hostsFor(cfg), profile, check.ipv6, check.upstream);
         ctx = { client, cfg, ipv6: check.ipv6 };
         publish(profile);
         unsubscribe = app.streambundle.getSelfStream("network.internet.state").onValue(onState);

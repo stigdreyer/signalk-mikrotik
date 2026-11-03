@@ -24,6 +24,8 @@ report the results (router model, RouterOS version, what failed) as an issue.
       disabled redirect rules (if DNS redirect is on).
 - [ ] `/ip firewall address-list print where list=skm-metered` shows the
       hostnames, plus dynamic entries with resolved IPs.
+- [ ] `/ip dns static print where comment=signalk-mikrotik` shows one
+      disabled `FWD` entry per hostname.
 - [ ] Restart the plugin: there are no duplicate rules.
 
 ## 2. Metered
@@ -35,6 +37,8 @@ In Freeboard → Internet, set the override to **Metered**.
 - [ ] A video stream that was already playing stops within seconds
       (connection flush).
 - [ ] New sites (e.g. a news site) don't load.
+- [ ] signalk-internet stays `metered` for 10 minutes, without flipping to
+      `offline`.
 - [ ] The Starlink app opens and shows Data Usage.
 - [ ] Signal K still shows Starlink status (dish reachable).
 - [ ] WinBox/SSH to the router still work.

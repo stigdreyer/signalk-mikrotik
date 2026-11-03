@@ -80,38 +80,54 @@ MikroTik, and add that port to the list:
 
 If your list has a different name, set it in the plugin config.
 
-## 4. The router as DNS server
+## 4. Router DNS
 
-The allowlist is made of domain names that the router resolves itself. This
-only works reliably when your devices ask the router for DNS too, and so does
-the traffic monitor.
+While metered, the plugin redirects all DNS from the LAN to the router. For
+each allowed domain it adds a DNS `FWD` entry that puts every IP the router
+hands out into the allowlist. So the router's DNS has to work for all your
+devices:
 
 ```routeros
 /ip dns set allow-remote-requests=yes
-/ip dhcp-server network print
-/ip dhcp-server network set [find] dns-server=<router-lan-ip>
+/ip dns print
 ```
 
-Devices pick up the new DNS server when they renew their lease. To force it,
-reconnect them. Containers using host networking need a restart.
+**Upstream servers.** Set fixed IPv4 servers. On the pilot (RouterOS 7.25,
+Starlink), the dynamic IPv6 upstream returned SERVFAIL for large answers:
 
-The plugin's **Redirect LAN DNS to the router** option also redirects
-hard-coded resolvers while metered. That needs `allow-remote-requests=yes`
-too.
+```routeros
+/ip dns set servers=1.1.1.1,1.0.0.1
+/ip dns cache flush
+```
 
-### Check EDNS before you switch
+**Address list lifetime.** An IP added by a `FWD` entry stays on the list for
+its DNS lifetime plus `address-list-extra-time`. CDNs use lifetimes of a minute
+or less, and the plugin's rules sit above "accept established", so with the
+default `0s` a running download or call drops once its IP expires:
 
-Depending on version and config, the RouterOS DNS forwarder may answer without
-the EDNS `OPT` record. Some clients reject those replies, for example software
-built on a newer c-ares ("Misformatted DNS reply"). Check from any machine on
-the LAN:
+```routeros
+/ip dns set address-list-extra-time=1d
+```
+
+**DHCP.** In normal mode your devices can keep any DNS server. Handing out a
+public resolver first keeps strict clients happy (see below), and the redirect
+takes over while metered:
+
+```routeros
+/ip dhcp-server network set [find] dns-server=1.1.1.1,<router-lan-ip>
+```
+
+Devices pick up DHCP changes when they renew their lease. Containers using host
+networking need a restart.
+
+**SRV answers.** RouterOS compresses the target name in SRV answers, which RFC
+2782 forbids. Most resolvers accept it, but strict ones (c-ares 1.34.8, as used
+by Music Assistant's radio search) reject the reply as misformatted. While
+metered, such lookups fail. To check from a Mac or Linux machine:
 
 ```sh
-dig @<router-ip> example.com
+dig @<router-ip> SRV _api._tcp.radio-browser.info
 ```
-
-The answer should contain an `OPT PSEUDOSECTION`. If it doesn't, try a DoH
-upstream (below) and check again before pointing your clients at the router.
 
 ### Optional: encrypted upstream (DoH)
 
@@ -120,6 +136,8 @@ upstream (below) and check again before pointing your clients at the router.
 /certificate import file-name=cacert.pem passphrase=""
 /ip dns set use-doh-server=https://cloudflare-dns.com/dns-query verify-doh-cert=yes
 ```
+
+The `FWD` entries still forward to the first plain server in `servers`.
 
 ## 5. Plugin config
 
@@ -148,5 +166,6 @@ can also check by hand:
 /ip firewall filter print where comment=signalk-mikrotik
 /ip firewall nat print where comment=signalk-mikrotik
 /ip firewall address-list print where comment=signalk-mikrotik
+/ip dns static print where comment=signalk-mikrotik
 /ipv6 firewall filter print where comment=signalk-mikrotik
 ```

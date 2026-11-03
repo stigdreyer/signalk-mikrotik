@@ -10,7 +10,7 @@ async function fakeRouter({ settings = {}, tables = {}, missing = [] } = {}) {
   const state = {
     settings: {
       "system/resource": { version: "7.16.1 (stable)" },
-      "ip/dns": { "allow-remote-requests": "true" },
+      "ip/dns": { "allow-remote-requests": "true", servers: "1.1.1.1,1.0.0.1", "address-list-extra-time": "1d" },
       "ipv6/settings": { "disable-ipv6": "false" },
       ...settings,
     },

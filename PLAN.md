@@ -54,10 +54,9 @@ Documentation for every user, tried out on the pilot boat.
   - the WAN list
   - pointing DHCP DNS at the router
   - an optional DoH upstream
-- **Known pitfall to document:** depending on version and config, the RouterOS
-  DNS forwarder may return replies without EDNS, and some clients (newer
-  c-ares) reject those. Users should check with `dig @<router>` before
-  switching clients to router DNS.
+- **Known pitfalls (found in the pilot):** a dynamic IPv6 upstream returned
+  SERVFAIL for large answers (fix: fixed IPv4 `servers`), and RouterOS
+  compresses SRV target names, which strict c-ares 1.34.8 rejects.
 - **Pilot:** go through the guide on the pilot boat and fix it wherever reality
   differs. Pilot-specific notes stay out of this repo.
 
@@ -177,9 +176,11 @@ is worth raising with Starlink.
   FQDNs, no wildcards, no duplicates).
 - Profile checkboxes in the plugin config.
 - **Sync:** active profiles become DNS `FWD` entries with
-  `match-subdomain=yes address-list=skm-metered`. Routers without that feature
-  fall back to plain FQDN address-list entries (no subdomains), with a
-  warning.
+  `match-subdomain=yes address-list=skm-metered`, like the base list already
+  does since 0.2.0 (pulled forward: without it, clients on a public resolver
+  got CDN IPs the router didn't allow, and signalk-internet's probe flapped).
+  Routers without that feature fall back to plain FQDN address-list entries
+  (no subdomains), with a warning.
 
 ## Phase 4: traffic monitor
 
