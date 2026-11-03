@@ -77,4 +77,5 @@ immediately:
 /ip firewall filter disable [find comment=signalk-mikrotik]
 /ip firewall nat disable [find comment=signalk-mikrotik]
 /ipv6 firewall filter disable [find comment=signalk-mikrotik]
+/ip dns static disable [find comment=signalk-mikrotik]
 ```

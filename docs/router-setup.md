@@ -169,3 +169,17 @@ can also check by hand:
 /ip dns static print where comment=signalk-mikrotik
 /ipv6 firewall filter print where comment=signalk-mikrotik
 ```
+
+Removal leaves the IPs that `FWD` entries added on the `skm-metered` list. No
+rule uses them any more, and they expire on their own.
+
+If you keep rules above the plugin's (for example an exemption for one
+device), a normal restart keeps them there. After a full removal the plugin
+installs at the top of the forward chain again. Put your rule back in front
+of it with `place-before` (`move` refused with "cannot move builtin" on
+RouterOS 7.25):
+
+```routeros
+/ip firewall filter remove [find comment="my exemption"]
+/ip firewall filter add chain=forward action=accept src-address=<ip> comment="my exemption" place-before=[find comment=signalk-mikrotik and action=accept]
+```
