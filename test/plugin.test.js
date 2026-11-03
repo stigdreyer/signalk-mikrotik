@@ -1,4 +1,7 @@
 const { test } = require("node:test");
+const { mkdtempSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const { join } = require("node:path");
 const assert = require("node:assert/strict");
 const { fakeRouter, defconf } = require("./fake-routeros");
 const createPlugin = require("..");
@@ -13,7 +16,15 @@ function fakeApp(initialState) {
     setPluginStatus: (s) => (app.status = s),
     setPluginError: (e) => (app.error = e),
     debug: () => {},
-    handleMessage: (id, delta) => app.deltas.push(delta.updates[0].values[0].value),
+    values: {},
+    dataDir: mkdtempSync(join(tmpdir(), "skm-")),
+    getDataDirPath: () => app.dataDir,
+    handleMessage: (id, delta) => {
+      for (const { path, value } of delta.updates[0].values) {
+        app.values[path] = value;
+        if (path === "network.mikrotik.profile") app.deltas.push(value);
+      }
+    },
     getSelfPath: (path) => (path === "network.internet.state" && initialState !== undefined ? { value: initialState } : undefined),
     streambundle: {
       getSelfStream: () => ({
@@ -99,4 +110,38 @@ test("preflight errors stop the install and show in the plugin status", async (t
   assert.match(app.error, /Interface list "WAN" not found/);
   assert.equal(fake.tables["ip/firewall/filter"].filter((r) => r.comment === "signalk-mikrotik").length, 0);
   assert.equal(app.listeners.length, 0);
+});
+
+test("usage is booked to the profile that was active, and served on GET /usage", async (t) => {
+  const app = fakeApp();
+  const { fake, plugin } = await start(t, app);
+  const ether1 = fake.tables.interface.find((i) => i.name === "ether1");
+  const grow = (rx, tx) => Object.assign(ether1, { "rx-byte": String(Number(ether1["rx-byte"]) + rx), "tx-byte": String(Number(ether1["tx-byte"]) + tx) });
+
+  grow(2000, 100);
+  await app.emit("metered"); // books the 2100 to normal before switching
+  grow(500, 50);
+  await app.emit("online"); // books the 550 to metered
+  assert.equal(app.values["network.mikrotik.usage.today.normal"], 2100);
+  assert.equal(app.values["network.mikrotik.usage.today.metered"], 550);
+  assert.equal(app.values["network.mikrotik.usage.wan.received"], 2500);
+  assert.equal(app.values["network.mikrotik.usage.wan.sent"], 150);
+
+  const routes = {};
+  plugin.registerWithRouter({ get: (p, fn) => (routes[p] = fn), post: () => {} });
+  let body;
+  routes["/usage"]({ query: {} }, { json: (b) => (body = b) });
+  assert.equal(body.profile, "normal");
+  assert.deepEqual(Object.values(body.days)[0], { normal: { rx: 2000, tx: 100 }, metered: { rx: 500, tx: 50 } });
+  routes["/usage"]({ query: { from: "2999-01-01" } }, { json: (b) => (body = b) });
+  assert.deepEqual(body.days, {});
+
+  plugin.stop();
+  // Bytes counted while the plugin was down go to the first sample after restart.
+  grow(10, 0);
+  const again = createPlugin(Object.assign(fakeApp(), { dataDir: app.dataDir }));
+  await again.start({ url: fake.url, username: "u", password: "p" });
+  again.stop();
+  const saved = JSON.parse(require("node:fs").readFileSync(join(app.dataDir, "usage.json"), "utf8"));
+  assert.deepEqual(Object.values(saved.days)[0].normal, { rx: 2010, tx: 100 });
 });

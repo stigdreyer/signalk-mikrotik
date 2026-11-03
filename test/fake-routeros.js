@@ -97,6 +97,10 @@ function defconf(overrides = {}) {
     tables: {
       "interface/list": [{ name: "WAN" }, { name: "LAN" }],
       "interface/list/member": [{ list: "WAN", interface: "ether1" }],
+      interface: [
+        { name: "ether1", "rx-byte": "1000", "tx-byte": "500" },
+        { name: "bridge", "rx-byte": "9000", "tx-byte": "9000" },
+      ],
       "ip/address": [{ address: "192.168.88.1/24", interface: "bridge" }],
       "ip/dhcp-server/network": [{ address: "192.168.88.0/24", "dns-server": "192.168.88.1" }],
       "ip/firewall/filter": [

@@ -1,6 +1,6 @@
 {
   "name": "signalk-mikrotik",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Signal K plugin that locks a MikroTik router down to an allowlist while the internet connection is metered",
   "main": "index.js",
   "license": "EUPL-1.2",
@@ -9,6 +9,7 @@
   "keywords": [
     "signalk-node-server-plugin",
     "signalk-category-utility",
+    "signalk-webapp",
     "mikrotik",
     "routeros",
     "starlink",
@@ -24,6 +25,10 @@
     "index.js",
     "lib",
     "profiles",
+    "public",
     "docs"
-  ]
+  ],
+  "signalk": {
+    "displayName": "MikroTik Data Usage"
+  }
 }

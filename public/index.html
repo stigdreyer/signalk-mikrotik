@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MikroTik Data Usage</title>
+<style>
+  :root {
+    --surface: #fcfcfb;
+    --panel: #f3f2ef;
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --grid: #e2e1dc;
+    --normal: #2a78d6;
+    --metered: #eb6834;
+    --error: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --panel: #252523;
+      --text: #f0efec;
+      --text-2: #c3c2b7;
+      --grid: #383835;
+      --normal: #3987e5;
+      --metered: #d95926;
+      --error: #ef7070;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--surface); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .muted { color: var(--text-2); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  .tabs button { font: inherit; padding: 4px 12px; border: 1px solid var(--grid); border-radius: 16px; background: none; color: var(--text); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+  .tile { background: var(--panel); border-radius: 8px; padding: 12px; }
+  .tile .value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+  .chart { position: relative; margin-top: 16px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--text-2); font-size: 11px; }
+  .tip { position: absolute; pointer-events: none; background: var(--text); color: var(--surface); padding: 6px 8px; border-radius: 6px; font-size: 13px; white-space: nowrap; display: none; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 2px 8px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  .error { color: var(--error); }
+  section { margin-top: 24px; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Data usage</h1>
+  <div class="muted">Router profile: <strong id="profile">…</strong></div>
+  <div id="message" class="error"></div>
+
+  <div class="row tabs" id="months" role="tablist"></div>
+  <div class="tiles" id="tiles"></div>
+
+  <div class="chart" id="chart">
+    <div class="row muted">
+      <span><span class="swatch" style="background: var(--normal)"></span>Normal</span>
+      <span><span class="swatch" style="background: var(--metered)"></span>Metered</span>
+    </div>
+    <svg id="bars" role="img" aria-label="Daily data usage, normal and metered"></svg>
+    <div class="tip" id="tip"></div>
+  </div>
+
+  <details>
+    <summary class="muted">Table</summary>
+    <table id="table"></table>
+  </details>
+
+  <section>
+    <h2>Router check</h2>
+    <div id="preflight" class="muted">…</div>
+  </section>
+
+  <p class="muted">Days are UTC, like Starlink's. Bytes are counted at the router's WAN interface, so they include
+    protocol overhead and the router's own traffic, but not the dish's own traffic. GB = 10<sup>9</sup> bytes.</p>
+</main>
+<script>
+const API = "/plugins/signalk-mikrotik";
+const GB = 1e9;
+const $ = (id) => document.getElementById(id);
+const gb = (bytes) => (bytes / GB).toFixed(bytes < 10 * GB ? 2 : 1);
+const sum = (b) => b.rx + b.tx;
+let data;
+let month;
+
+async function get(path) {
+  const res = await fetch(API + path, { credentials: "same-origin" });
+  if (res.status === 401 || res.status === 403) throw new Error("Log in to the Signal K admin UI to see this page.");
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  return res.json();
+}
+
+function daysOfMonth(m) {
+  const [y, mo] = m.split("-").map(Number);
+  const n = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return Array.from({ length: n }, (_, i) => {
+    const key = `${m}-${String(i + 1).padStart(2, "0")}`;
+    const day = data.days[key];
+    return { key, d: i + 1, normal: day ? sum(day.normal) : 0, metered: day ? sum(day.metered) : 0 };
+  });
+}
+
+function renderTabs() {
+  const now = new Date().toISOString().slice(0, 7);
+  const months = [...new Set([...Object.keys(data.days).map((d) => d.slice(0, 7)), now])].sort();
+  month ??= now;
+  $("months").replaceChildren(...months.map((m) => {
+    const b = document.createElement("button");
+    b.role = "tab";
+    b.textContent = new Date(m + "-01T00:00:00Z").toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
+    b.setAttribute("aria-selected", m === month);
+    b.onclick = () => { month = m; render(); };
+    return b;
+  }));
+}
+
+function renderTiles(days) {
+  const normal = days.reduce((a, d) => a + d.normal, 0);
+  const metered = days.reduce((a, d) => a + d.metered, 0);
+  const tiles = [["Normal", `${gb(normal)} GB`], ["Metered", `${gb(metered)} GB`]];
+  if (data.pricePerGb > 0) {
+    const cost = (metered / GB) * data.pricePerGb;
+    tiles.push(["Metered cost (estimate)", `${cost.toFixed(2)} ${data.currency}`]);
+  }
+  $("tiles").replaceChildren(...tiles.map(([label, value]) => {
+    const t = document.createElement("div");
+    t.className = "tile";
+    t.innerHTML = `<div class="muted"></div><div class="value"></div>`;
+    t.children[0].textContent = label;
+    t.children[1].textContent = value;
+    return t;
+  }));
+}
+
+/** Rect with rounded top corners only: the data end rounds, the baseline stays square. */
+function topRounded(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+
+function niceMax(v) {
+  if (v <= 0) return GB;
+  const p = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v);
+}
+
+function renderChart(days) {
+  // Draw at the real pixel width, so labels keep their size on a phone.
+  const W = Math.max(300, $("bars").clientWidth || 880), H = 240, L = 44, B = 20, T = 8;
+  const max = niceMax(Math.max(...days.map((d) => d.normal + d.metered)));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  const step = (W - L) / days.length;
+  const bw = Math.max(2, step - 4);
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = $("bars");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const parts = [];
+  for (let i = 0; i <= 4; i++) {
+    const v = (max * i) / 4;
+    parts.push(`<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>`);
+    parts.push(`<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${+(v / GB).toFixed(2)}${i === 4 ? " GB" : ""}</text>`);
+  }
+  days.forEach((d, i) => {
+    const x = L + i * step + (step - bw) / 2;
+    const base = y(0);
+    const nh = base - y(d.normal);
+    const mh = base - y(d.metered);
+    // Metered sits on top of normal with a 2px surface gap; whichever is on top gets the rounded end.
+    if (d.normal > 0) parts.push(`<path d="${topRounded(x, base - nh, bw, nh, d.metered > 0 ? 0 : 4)}" fill="var(--normal)"/>`);
+    if (d.metered > 0) {
+      const top = base - nh - (d.normal > 0 ? 2 : 0) - mh;
+      parts.push(`<path d="${topRounded(x, top, bw, mh, 4)}" fill="var(--metered)"/>`);
+    }
+    if (d.d === 1 || d.d % (W < 500 ? 10 : 5) === 0) parts.push(`<text x="${x + bw / 2}" y="${H - 4}" text-anchor="middle">${d.d}</text>`);
+    parts.push(`<rect class="hit" data-i="${i}" x="${L + i * step}" y="${T}" width="${step}" height="${H - T - B}" fill="transparent"/>`);
+  });
+  svg.innerHTML = parts.join("");
+  svg.querySelectorAll(".hit").forEach((r) => {
+    const show = () => {
+      const d = days[r.dataset.i];
+      const tip = $("tip");
+      tip.textContent = `${d.key} · Normal ${gb(d.normal)} GB · Metered ${gb(d.metered)} GB`;
+      tip.style.display = "block";
+      const box = r.getBoundingClientRect(), chart = $("chart").getBoundingClientRect();
+      const left = box.left - chart.left + box.width / 2 - tip.offsetWidth / 2;
+      tip.style.left = `${Math.max(0, Math.min(left, chart.width - tip.offsetWidth))}px`;
+      tip.style.top = `${box.top - chart.top - tip.offsetHeight - 4}px`;
+    };
+    r.addEventListener("pointerenter", show);
+    r.addEventListener("pointerleave", () => ($("tip").style.display = "none"));
+  });
+}
+
+function renderTable(days) {
+  const rows = days.filter((d) => d.normal || d.metered);
+  $("table").innerHTML = "<tr><th>Day (UTC)</th><th>Normal GB</th><th>Metered GB</th></tr>" +
+    rows.map((d) => `<tr><td>${d.key}</td><td>${gb(d.normal)}</td><td>${gb(d.metered)}</td></tr>`).join("");
+}
+
+function render() {
+  renderTabs();
+  const days = daysOfMonth(month);
+  renderTiles(days);
+  renderChart(days);
+  renderTable(days);
+}
+
+async function load() {
+  try {
+    data = await get("/usage");
+    $("profile").textContent = data.profile;
+    $("message").textContent = "";
+    render();
+  } catch (err) {
+    $("message").textContent = err.message;
+  }
+}
+
+async function loadPreflight() {
+  try {
+    const c = await get("/preflight");
+    const lines = [`RouterOS ${c.version}`, ...c.errors.map((e) => `Error: ${e}`), ...c.warnings];
+    if (!c.errors.length && !c.warnings.length) lines.push("No problems found.");
+    $("preflight").replaceChildren(...lines.map((l) => Object.assign(document.createElement("div"), { textContent: l })));
+  } catch (err) {
+    $("preflight").textContent = err.message;
+  }
+}
+
+load();
+loadPreflight();
+setInterval(load, 60_000);
+addEventListener("resize", () => data && render());
+</script>
+</body>
+</html>

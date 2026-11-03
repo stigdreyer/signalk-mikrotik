@@ -1,9 +1,9 @@
 # signalk-mikrotik
 
 > **Status: early development.** Phase 1 (the profile switch) is implemented
-> and has been piloted on one router (hAP ax S, RouterOS 7.25). Still to come
-> (see [PLAN.md](PLAN.md)): a data usage dashboard, curated profiles and the
-> traffic monitor.
+> and has been piloted on one router (hAP ax S, RouterOS 7.25). Phase 2 (the
+> data usage dashboard) is in its pilot. Still to come (see [PLAN.md](PLAN.md)):
+> curated profiles and the traffic monitor.
 
 A Signal K plugin that switches a **MikroTik** router between a **normal** and a
 **metered** firewall profile, following the internet state published by
@@ -100,6 +100,30 @@ lists:
 3. **Learned entries:** domains you approved from the traffic monitor.
 
 Everything else that goes out to WAN is dropped.
+
+## Data usage dashboard
+
+Every 60 seconds the plugin reads the byte counters of the WAN interfaces and
+books the growth to the current UTC day, split into **normal** and
+**metered** by the profile that was active. The Signal K webapp **MikroTik
+Data Usage** shows daily bars per month, the totals and, if you set a price
+per metered GB, the estimated cost. You can check it against Starlink's own
+Data Usage page.
+
+The same numbers are published to Signal K for KIP, Home Assistant or a
+history plugin:
+
+| Path | Value |
+|---|---|
+| `network.mikrotik.usage.today.normal` | bytes today (UTC), normal profile |
+| `network.mikrotik.usage.today.metered` | bytes today (UTC), metered profile |
+| `network.mikrotik.usage.wan.received` | bytes received since the plugin started counting |
+| `network.mikrotik.usage.wan.sent` | bytes sent since the plugin started counting |
+
+`GET /plugins/signalk-mikrotik/usage?from=YYYY-MM-DD&to=YYYY-MM-DD` returns
+the daily buckets. While the plugin or the Signal K server is down the router
+keeps counting, and the gap is booked to the first sample after restart. A
+router reboot loses the bytes since the last sample.
 
 ## Traffic monitor
 

@@ -121,6 +121,10 @@ Remove and verify that nothing tagged is left.
 
 ## Phase 2: data usage dashboard
 
+> **Status:** built in 0.3.0 (24 tests): collector, JSON storage, Signal K
+> paths, `GET /usage`, webapp page. The profile switch books the bytes up to
+> the switch to the old profile first. Pilot: compare a week with Starlink.
+
 The goal is to see how much data went over the uplink per day, split into
 normal and metered. That makes Starlink's own figures (Roam vs Ocean Mode) easy
 to check. It doesn't depend on profiles or traffic learning, so it comes first
