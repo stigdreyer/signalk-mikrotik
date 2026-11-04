@@ -170,49 +170,46 @@ and brings the webapp with it.
 compare per day. A few percent difference is expected; a consistent large gap
 is worth raising with Starlink.
 
-## Phase 3: curated profiles
+## Phase 3: the Allowlist page on v2fly (replaces curated profiles and the traffic monitor)
 
-- `profiles/*.json`, one file per profile (weather, messaging, email,
-  tracking): name, description, list of FQDNs, notes on known gaps.
-- Seed from spidgrou's `whitelist.conf`, keeping the MIT notice.
-- **Profiles are community data.** `CONTRIBUTING.md` explains how to add or
-  fix a profile by PR, and a test validates the profile JSON (schema, valid
-  FQDNs, no wildcards, no duplicates).
-- Profile checkboxes in the plugin config.
-- **Sync:** active profiles become DNS `FWD` entries with
-  `match-subdomain=yes address-list=skm-metered`, like the base list already
-  does since 0.2.0 (pulled forward: without it, clients on a public resolver
-  got CDN IPs the router didn't allow, and signalk-internet's probe flapped).
-  Routers without that feature fall back to plain FQDN address-list entries
-  (no subdomains), with a warning.
+> **Status:** MVP built in 0.5.0 (32 tests). Changed during the pilot
+> (2026-11-03/04): profile checkboxes in the plugin config became a webapp
+> page; the hand-made service files became v2fly/domain-list-community
+> (MIT), used as is to experiment with the UX before customising anything.
+> Usage per service is "seen / not seen", boat-wide.
 
-## Phase 4: traffic monitor
+- **Catalog:** `data/v2fly.json`, compiled by `tools/build-v2fly.js` from a
+  pinned v2fly commit: per list its suffix and exact domains, `@ads`
+  entries, and whole-list includes; per `category-*` its member lists
+  (transitive) and own domains. regexp/keyword entries are skipped.
+- **Lookup:** exact name, then longest suffix; a domain in several lists goes
+  to the smallest. Akamai CNAME names (`*.edgesuite.net` etc.) are looked up
+  by the customer name they embed.
+- **Seen names:** every 60 s, `/ip/dns/cache/all` names minus CNAME targets.
+  Last seen and UTC days, 14 days, in `seen.json`; names looked up while
+  metered that aren't allowed get a `blocked` timestamp.
+- **Router targets:** fixed lists get address-list + FWD entries; picked
+  services (with their includes) and domains get FWD entries only (`full:`
+  entries without subdomain matching). Saving syncs only the difference, and
+  flushes the DNS cache while metered.
+- **Webapp page:** Blocked while metered, Allowed, Seen on board; search over
+  seen items and the whole catalog (`GET /catalog?q=`); v2fly category chips;
+  ads hidden by default; details per row; sticky save bar.
+- **Requirement:** in normal mode the page only sees devices that use the
+  router for DNS; preflight warns when DHCP hands out another server first.
 
-- **Collector:** every 30 s, read:
-  - `/ip/dns/cache`: domain → IP
-  - `/ip/firewall/connection`: source, destination and bytes
-  - DHCP leases: IP → device name
+**Next, from the brainstorm (2026-11-04):**
+- DNS log via remote syslog instead of cache polling: every lookup in real
+  time with the client IP, so per device, no sampling gaps. Check first that
+  RouterOS logs the client IP.
+- Traffic Flow (IPFIX) for bytes per device and service on the usage page.
+  Check first whether it sees fasttracked connections.
+- Own overlay on v2fly only once the UX has settled (e.g. Gmail out of
+  `google`, Starlink out of `spacex`, marine services).
 
-  The plugin joins these into domain × device × bytes and keeps rolling daily
-  JSON files in the plugin data directory (retention configurable, default 14
-  days). The connection table can be large on busy networks, so the poll
-  interval is configurable.
-  `shortcut: polling misses connections shorter than the interval; upgrade to
-  Traffic Flow (IPFIX) export if the numbers look too low.`
-- If clients don't use router DNS, the webapp says so instead of showing an
-  empty or misleading log.
-- **Webapp, second page** (next to the Phase 2 usage dashboard):
-  - active lists
-  - top domains by bytes, filterable by device
-  - an "allow while metered" toggle per domain, which becomes a learned entry
-  - an "export as profile" action that produces JSON ready to contribute
-    upstream
-- **REST endpoints:** for the webapp to list traffic, manage learned entries
-  and trigger preflight or removal, admin only.
-
-**Pilot test:** an afternoon in port using the Starlink app and the crew's
-apps, then review the log. The real Starlink app hosts found this way go into
-the Starlink preset.
+**Pilot test:** a day with DHCP pointing at the router, then pick services.
+Then go metered, try something not allowed (e.g. a Docker pull), check it
+appears under "Blocked while metered", allow it, retry.
 
 ## Phase 5: publish
 
@@ -237,8 +234,9 @@ the Starlink preset.
 2. **Minimum RouterOS version:** the REST API needs v7. Settle the floor once
    the optional features are probed (likely 7.1 for the core, newer for
    subdomain matching).
-3. **Safety comms:** a fixed default set, or simply the messaging profile on
-   by default?
+3. ~~**Safety comms**~~: decided in 0.4.0. No separate set: pick the crew's
+   messaging apps on the Allowlist page. Nothing is picked by default, so a
+   new install never opens more than the fixed lists.
 4. **Router password storage:** the plugin config is plain JSON on the Signal K
    host. Document that a least-privilege, LAN-only user is the mitigation.
 5. **Later:** read the dish's `disablement_code` (needs an upstream PR to

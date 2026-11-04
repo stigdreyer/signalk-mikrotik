@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MikroTik Allowlist</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .summary { background: var(--panel); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+  .toolbar { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 8px 0; border-bottom: 1px solid var(--grid); }
+  input[type="search"] { font: inherit; width: 100%; padding: 8px 10px; border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); color: var(--text); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font: inherit; font-size: 13px; padding: 3px 10px; border: 1px solid var(--grid); border-radius: 14px; background: none; color: var(--text); cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+  .chip .n { color: var(--text-2); margin-left: 4px; }
+  .chip[aria-pressed="true"] .n { color: inherit; opacity: 0.7; }
+  .item { border-bottom: 1px solid var(--grid); padding: 8px 0; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row input { width: 18px; height: 18px; flex: none; margin: 0; }
+  .row label { flex: 1; min-width: 0; cursor: pointer; }
+  .title { font-weight: 500; }
+  .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel); color: var(--text-2); }
+  .when { font-size: 13px; color: var(--text-2); white-space: nowrap; text-align: right; }
+  .blocked { color: var(--metered); }
+  .more { font: inherit; font-size: 13px; background: none; border: none; color: var(--text-2); cursor: pointer; padding: 2px 4px; }
+  .details { font-size: 13px; color: var(--text-2); margin: 6px 0 0 28px; overflow-wrap: anywhere; }
+  .details div { margin-top: 2px; }
+  .savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--grid); padding: 12px 0; display: flex; gap: 12px; align-items: center; }
+  .savebar button { font: inherit; padding: 6px 16px; border-radius: 6px; border: none; background: var(--text); color: var(--surface); cursor: pointer; }
+  .savebar button:disabled { opacity: 0.4; cursor: default; }
+  .empty { padding: 12px 0; }
+</style>
+</head>
+<body>
+<main>
+  <nav><a href="index.html">Usage</a><a href="allowlist.html" aria-current="page">Allowlist</a></nav>
+  <h1>Allowed while metered</h1>
+  <div class="muted">Router profile: <strong id="profile">…</strong></div>
+  <div id="message" class="error"></div>
+  <div class="summary" id="summary">…</div>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search seen services, or any service by name (e.g. whatsapp)" autocomplete="off">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div id="lists"></div>
+
+  <section>
+    <details>
+      <summary class="muted">Always allowed</summary>
+      <div id="fixed"></div>
+    </details>
+  </section>
+  <p class="muted" id="credit"></p>
+
+  <div class="savebar">
+    <button id="save" disabled>Save</button>
+    <span id="status" class="muted"></span>
+  </div>
+</main>
+<script>
+const API = "/plugins/signalk-mikrotik";
+const $ = (id) => document.getElementById(id);
+const ADS = "ads";
+let view;              // last GET /allowlist
+let picked;            // { services: Set, domains: Set } as edited
+let catalogHits = [];  // GET /catalog results for the current search
+const filter = { categories: new Set(), ads: false, q: "" };
+const open = new Set(); // expanded rows
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, {
+    credentials: "same-origin",
+    ...opts,
+    headers: opts.body ? { "content-type": "application/json" } : {},
+  });
+  if (res.status === 401 || res.status === 403) throw new Error("Log in to the Signal K admin UI to see this page.");
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  return res.json();
+}
+
+// v2fly ids and categories read like "apple-update" and "category-ai-chat-!cn".
+const ACRONYMS = { ai: "AI", cdn: "CDN", doh: "DoH", ntp: "NTP", vpn: "VPN", tv: "TV", ddns: "DDNS", ip: "IP", stun: "STUN", ipfs: "IPFS" };
+const words = (s) => s.split("-").map((w, i) => ACRONYMS[w] ?? (i ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
+const prettyId = (id) => words(id);
+const prettyCategory = (c) => words(c.replace(/^category-/, "").replace(/-!cn$/, ""));
+
+function ago(ms) {
+  const min = Math.round((Date.now() - ms) / 60_000);
+  if (min < 2) return "just now";
+  if (min < 90) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  return h < 36 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
+const seenText = (s) => (s ? `seen ${ago(s.last)}${s.days > 1 ? ` · ${s.days} days` : ""}` : "not seen yet");
+
+function el(tag, props = {}, ...children) {
+  const e = Object.assign(document.createElement(tag), props);
+  // Children may be conditional (`cond && el(...)`): keep only text and nodes, so 0/false/null vanish.
+  e.append(...children.flat().filter((c) => typeof c === "string" || c instanceof Node));
+  return e;
+}
+
+/** Services and domains as one kind of row. */
+function items() {
+  const services = view.services.map((s) => ({
+    kind: "services", key: s.id, title: prettyId(s.id), categories: s.categories, ...s,
+  }));
+  const domains = view.domains.map((d) => ({
+    kind: "domains", key: d.domain, title: d.domain, categories: d.category ? [d.category] : [], ...d,
+  }));
+  return [...services, ...domains];
+}
+
+// "companies" says nothing, and v2fly's regional lists (-cn, -ir, -ru, …) are about other countries' routing.
+const useful = (c) => c !== "category-companies" && !/-(cn|ir|ru|jp|hk|uk|mm)$/.test(c);
+const isAds = (it) => it.ads || it.categories.some((c) => c.startsWith("category-ads"));
+const isPicked = (it) => picked[it.kind].has(it.key);
+const via = (it) => (it.kind === "services" ? [...picked.services].find((p) => p !== it.key && it.parents?.includes(p)) : null);
+
+function matches(it) {
+  if (!filter.ads && isAds(it) && !isPicked(it)) return false;
+  if (filter.categories.size && !it.categories.some((c) => filter.categories.has(c))) return false;
+  const q = filter.q;
+  return !q || it.title.toLowerCase().includes(q) || it.key.includes(q) || (it.names ?? []).some((n) => n.includes(q));
+}
+
+function row(it, { showBlocked = false } = {}) {
+  const id = `${it.kind}:${it.key}`;
+  const parent = via(it);
+  const box = el("input", { type: "checkbox", id, checked: isPicked(it) || !!parent, disabled: !!parent && !isPicked(it) });
+  box.onchange = () => {
+    box.checked ? picked[it.kind].add(it.key) : picked[it.kind].delete(it.key);
+    render();
+  };
+  const tags = el("span", { className: "tags" },
+    it.categories.filter(useful).slice(0, 3).map((c) => el("span", { className: "tag", textContent: prettyCategory(c) })),
+    isAds(it) && el("span", { className: "tag", textContent: "Ads / tracking" }),
+    parent && el("span", { className: "tag", textContent: `via ${prettyId(parent)}` }));
+  const when = showBlocked && it.seen?.blocked
+    ? el("span", { className: "when blocked", textContent: `blocked ${ago(it.seen.blocked)}` })
+    : el("span", { className: "when", textContent: seenText(it.seen) });
+  const toggle = el("button", { className: "more", textContent: open.has(id) ? "▴" : "▾", title: "Details", ariaLabel: `Details for ${it.title}` });
+  toggle.onclick = () => { open.has(id) ? open.delete(id) : open.add(id); render(); };
+  const details = open.has(id) && el("div", { className: "details" },
+    it.names?.length && el("div", { textContent: `Looked up: ${it.names.join(", ")}` }),
+    it.kind === "services" && el("div", { textContent: `Allowing it opens ${it.size} v2fly domain${it.size === 1 ? "" : "s"} and their subdomains.` }),
+    it.includes?.length && el("div", { textContent: `Includes: ${it.includes.map(prettyId).join(", ")}` }),
+    it.parents?.length && el("div", { textContent: `Part of: ${it.parents.map(prettyId).join(", ")}` }),
+    it.kind === "domains" && el("div", { textContent: "Not in v2fly. Allowing it opens this domain and its subdomains." }));
+  return el("div", { className: "item" },
+    el("div", { className: "row" }, box, el("label", { htmlFor: id }, el("span", { className: "title", textContent: it.title }), tags), when, toggle),
+    details);
+}
+
+function section(title, note, rows) {
+  if (!rows.length) return null;
+  return el("section", {}, el("h2", { textContent: title }), note && el("p", { className: "muted", textContent: note }), rows);
+}
+
+function renderChips(all) {
+  const counts = {};
+  for (const it of all) for (const c of it.categories) if (useful(c) && !c.startsWith("category-ads")) counts[c] = (counts[c] ?? 0) + 1;
+  const chips = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => {
+    const b = el("button", { className: "chip", ariaPressed: filter.categories.has(c) }, prettyCategory(c), el("span", { className: "n", textContent: n }));
+    b.onclick = () => { filter.categories.has(c) ? filter.categories.delete(c) : filter.categories.add(c); render(); };
+    return b;
+  });
+  const ads = all.filter(isAds).length;
+  const adChip = el("button", { className: "chip", ariaPressed: filter.ads }, "Ads / tracking", el("span", { className: "n", textContent: ads }));
+  adChip.onclick = () => { filter.ads = !filter.ads; render(); };
+  $("chips").replaceChildren(...chips, ...(ads ? [adChip] : []));
+}
+
+function render() {
+  const all = items();
+  renderChips(all);
+  const shown = all.filter(matches);
+
+  // Sections follow the saved state, so a row doesn't jump away when you tick it.
+  const saved = (it) => it.allowed || it.allowedVia;
+  const blocked = shown.filter((it) => it.seen?.blocked && !saved(it)).sort((a, b) => b.seen.blocked - a.seen.blocked);
+  const allowed = shown.filter(saved).sort((a, b) => a.title.localeCompare(b.title));
+  const rest = shown.filter((it) => !blocked.includes(it) && !allowed.includes(it))
+    .sort((a, b) => (b.seen?.days ?? 0) - (a.seen?.days ?? 0) || (b.seen?.last ?? 0) - (a.seen?.last ?? 0));
+  const known = new Set(all.filter((it) => it.kind === "services").map((it) => it.key));
+  const fromCatalog = catalogHits.filter((s) => !known.has(s.id)).map((s) => ({ kind: "services", key: s.id, title: prettyId(s.id), ...s }));
+
+  const lists = [
+    section("Blocked while metered", "Looked up while metered and not allowed. Tick to allow.", blocked.map((it) => row(it, { showBlocked: true }))),
+    section("Allowed", null, allowed.map((it) => row(it))),
+    section(`Seen on board (last ${view.keepDays} days)`, null, rest.map((it) => row(it))),
+    section("More from the v2fly catalog", "Not seen on board yet.", fromCatalog.map((it) => row(it))),
+  ].filter(Boolean);
+  if (!lists.length) lists.push(el("p", { className: "muted empty", textContent: filter.q ? "Nothing matches." : "Nothing seen yet. Devices show up here once they look names up through the router." }));
+  $("lists").replaceChildren(...lists);
+
+  const n = picked.services.size + picked.domains.size;
+  $("summary").textContent = n
+    ? `${picked.services.size} service${picked.services.size === 1 ? "" : "s"} and ${picked.domains.size} domain${picked.domains.size === 1 ? "" : "s"} allowed while metered, plus the always-allowed lists. Everything else is blocked.`
+    : "Only the always-allowed lists get through while metered. Tick what your crew needs.";
+  dirty();
+}
+
+function changes() {
+  const was = (kind) => new Set((kind === "services" ? view.services : view.domains).filter((x) => x.allowed).map((x) => x.id ?? x.domain));
+  const diff = (a, b) => [...a].filter((x) => !b.has(x)).length + [...b].filter((x) => !a.has(x)).length;
+  return diff(picked.services, was("services")) + diff(picked.domains, was("domains"));
+}
+
+function dirty() {
+  const n = changes();
+  $("save").disabled = n === 0;
+  if ($("save").dataset.busy) return;
+  if (n) $("status").textContent = `${n} unsaved change${n > 1 ? "s" : ""}`;
+  else if (/unsaved/.test($("status").textContent)) $("status").textContent = "";
+}
+
+function show(v) {
+  view = v;
+  picked = {
+    services: new Set(v.services.filter((s) => s.allowed).map((s) => s.id)),
+    domains: new Set(v.domains.filter((d) => d.allowed).map((d) => d.domain)),
+  };
+  $("profile").textContent = v.profile;
+  $("fixed").replaceChildren(...v.fixed.map((f) => el("div", { className: "item" }, el("div", { className: "title", textContent: f.name }), el("div", { className: "details", style: "margin-left: 0", textContent: f.hosts.join(", ") }))));
+  $("credit").textContent = `Services and categories: v2fly/domain-list-community (${(v.v2fly ?? "").slice(0, 7)}), MIT licence.`;
+  render();
+}
+
+let searchTimer;
+$("search").oninput = () => {
+  filter.q = $("search").value.trim().toLowerCase();
+  render();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    catalogHits = filter.q.length >= 2 ? (await api(`/catalog?q=${encodeURIComponent(filter.q)}`).catch(() => ({ services: [] }))).services : [];
+    render();
+  }, 250);
+};
+
+$("save").onclick = async () => {
+  // Services picked from the catalog search need to stay listed after saving.
+  const body = { services: [...picked.services], domains: [...picked.domains] };
+  $("save").disabled = true;
+  $("save").dataset.busy = "1";
+  $("status").textContent = "Saving to the router… big services can take a minute.";
+  try {
+    show(await api("/allowlist", { method: "POST", body: JSON.stringify(body) }));
+    $("status").textContent = "Saved. The router is updated.";
+  } catch (err) {
+    $("message").textContent = err.message;
+    $("status").textContent = "";
+  } finally {
+    delete $("save").dataset.busy;
+    dirty();
+  }
+};
+
+api("/allowlist").then(show).catch((err) => ($("message").textContent = err.message));
+</script>
+</body>
+</html>

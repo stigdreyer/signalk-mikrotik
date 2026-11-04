@@ -2,8 +2,8 @@
 
 > **Status: early development.** Phase 1 (the profile switch) is implemented
 > and has been piloted on one router (hAP ax S, RouterOS 7.25). Phase 2 (the
-> data usage dashboard) is in its pilot. Still to come (see [PLAN.md](PLAN.md)):
-> curated profiles and the traffic monitor.
+> data usage dashboard) is in its pilot, and Phase 3 (the Allowlist page on
+> v2fly's service catalog) is built as an MVP. See [PLAN.md](PLAN.md).
 
 A Signal K plugin that switches a **MikroTik** router between a **normal** and a
 **metered** firewall profile, following the internet state published by
@@ -16,9 +16,9 @@ per GB (6 USD/GB on Roam Unlimited and Personal Maritime since 27 September
 only the services you choose can reach the internet. Background traffic like OS
 updates, cloud sync, telemetry and streaming is dropped at the router.
 
-The plugin also watches your network traffic in normal mode, so you can build
-the metered allowlist from what your crew actually uses rather than guessing
-domains.
+The plugin also shows which services and domains your devices look up, and
+what got blocked while metered, so you build the allowlist from what your crew
+actually uses rather than guessing domains.
 
 ## How it fits together
 
@@ -82,22 +82,21 @@ which always boots open, a power blip at sea doesn't reopen the gate.
 While metered, outbound WAN traffic is allowed only to the union of three
 lists:
 
-1. **Base list** (always on)
+1. **Always allowed**
    - **Uplink management:** a preset per uplink. The **Starlink** preset is on
      by default and covers the dish on the LAN (default `192.168.100.0/24`)
      plus the Starlink cloud (account, subscription, data usage). Keep it on if
      you use Starlink: without it you can't turn Ocean Mode off.
-   - **Boat systems:** NTP, the signalk-internet probe hosts, and the upstreams
-     of the Signal K plugins you run.
-   - **Safety comms:** a minimal messaging and email set for the crew.
-2. **Curated profiles** (tick to enable)
-   - **Weather / routing:** PredictWind, Windy, Saildocs / GRIB, NOAA, ECMWF
-     open data, …
-   - **Messaging:** WhatsApp, Signal, iMessage / FaceTime, Telegram
-   - **Email:** Gmail, Outlook / Microsoft 365, iCloud Mail
-   - **Tracking / logging:** NoForeignLand, AIS uploaders, PredictWind / Garmin
-     tracking, …
-3. **Learned entries:** domains you approved from the traffic monitor.
+   - **Boat systems:** NTP and the signalk-internet probe hosts.
+2. **What you pick on the Allowlist page** of the webapp:
+   - **Services** from
+     [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community),
+     about 1,400 of them (WhatsApp, Telegram, Docker, Netflix, …), with v2fly's
+     categories. For crew safety comms, pick your messaging apps.
+   - **Domains** the router has seen your devices look up that v2fly doesn't
+     know.
+
+   Everything you pick allows its subdomains too.
 
 Everything else that goes out to WAN is dropped.
 
@@ -125,21 +124,40 @@ the daily buckets. While the plugin or the Signal K server is down the router
 keeps counting, and the gap is booked to the first sample after restart. A
 router reboot loses the bytes since the last sample.
 
-## Traffic monitor
+## Allowlist page
 
-In normal mode the plugin keeps a rolling log (about 14 days) of:
+The webapp's **Allowlist** page is where you choose what stays reachable while
+metered. Every minute the plugin reads the names in the router's DNS cache and
+keeps, for 14 days, when each was last seen and on how many days. The page
+shows:
 
-- **domain**: from the router's DNS cache
-- **device**: from the DHCP lease or hostname
-- **bytes**: from connection tracking
+- **Blocked while metered:** services and domains your devices looked up
+  while metered that aren't allowed, newest first. Tick one to allow it after
+  the fact, e.g. when a Docker update failed. While metered, saving also
+  flushes the router's DNS cache, so devices ask again and get through.
+- **Allowed**, then **Seen on board**: every name a device looked up, grouped
+  into its v2fly service (or its domain when v2fly doesn't know it), most used
+  first ("seen 3 min ago · 9 days"). Details show the names looked up, how
+  many domains allowing it opens, and v2fly's hierarchy (Apple includes
+  iCloud, Apple TV+, Apple update, …).
+- **Search** filters what was seen and also searches the whole v2fly catalog,
+  so you can allow a service before anyone used it.
+- **Category chips** from v2fly filter the list; ads and tracking are hidden
+  unless you show them.
+- **Always allowed:** the fixed lists, for reference.
 
-The plugin's webapp in Signal K admin lists the top domains per device. You
-tick the ones that should stay reachable while metered, and they become learned
-entries.
+Names that are only CNAME targets (CDN hosts) are left out: nobody asked for
+them, so they'd show up as blocked although their service is allowed.
 
-The easiest way to build the list is a short session in port. Use each app the
-way you would at sea, including the Starlink app (open Data Usage, toggle a
-setting), then review the log.
+Saving updates only the changed router entries. The firewall rules stay as
+they are.
+
+The page learns from the router's DNS. While metered the DNS redirect sends
+every lookup there. In normal mode it only sees devices that use the router
+as their DNS server, so hand out the router first via DHCP if you want to
+build your list in port. The easiest way: a short session in port using each
+app the way you would at sea, including the Starlink app (open Data Usage,
+toggle a setting), then pick from the list.
 
 ## What it does on the router
 
@@ -199,7 +217,7 @@ The router's own traffic (output chain) isn't touched.
 
 Step-by-step router setup: [docs/router-setup.md](docs/router-setup.md).
 
-## Configuration (planned)
+## Configuration
 
 | Setting | Description |
 |---|---|
@@ -207,9 +225,10 @@ Step-by-step router setup: [docs/router-setup.md](docs/router-setup.md).
 | Accept self-signed certificate | For `www-ssl` with the router's own certificate |
 | WAN interface list | Default `WAN` |
 | Uplink presets | Starlink (default on, dish subnet configurable) |
-| Profiles | Curated profiles to enable while metered |
-| Learned entries | Managed in the webapp |
-| Traffic log retention | Default 14 days |
+| Redirect LAN DNS to the router while metered | Default on |
+
+What's allowed while metered is picked on the webapp's Allowlist page, not in
+the plugin config.
 | Price per metered GB, currency | For the cost estimate on the usage dashboard |
 
 ## Known limitations
@@ -227,9 +246,9 @@ Step-by-step router setup: [docs/router-setup.md](docs/router-setup.md).
 - **No billing truth.** Nothing tells the plugin whether Ocean Mode is actually
   on in your Starlink account. The override is yours to keep in sync. The dish's
   `disablement_code` (`IN_OCEAN` vs `OKAY`) may help on the high seas in future.
-- **App host lists change.** Re-check the traffic monitor if an app stops
-  working while metered, and please send fixed or new profiles back as a PR.
-  The webapp can export your learned entries as a profile file.
+- **App host lists change.** If an app stops working while metered, check
+  which hosts it uses, and please send fixed or new profiles back as a PR (see
+  [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Credits
 
@@ -242,5 +261,6 @@ Step-by-step router setup: [docs/router-setup.md](docs/router-setup.md).
 
 ## License
 
-[EUPL-1.2](LICENSE) (European Union Public Licence). Anything reused from
-mikrotik-starlink-ocean-mode keeps its MIT notice.
+[EUPL-1.2](LICENSE) (European Union Public Licence). `data/v2fly.json` is
+compiled from v2fly/domain-list-community and keeps its MIT notice in
+[data/NOTICE](data/NOTICE).

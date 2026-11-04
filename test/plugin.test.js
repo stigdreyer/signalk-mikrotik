@@ -145,3 +145,82 @@ test("usage is booked to the profile that was active, and served on GET /usage",
   const saved = JSON.parse(require("node:fs").readFileSync(join(app.dataDir, "usage.json"), "utf8"));
   assert.deepEqual(Object.values(saved.days)[0].normal, { rx: 2010, tx: 100 });
 });
+
+/** Call a route the plugin registered, the way Express would. */
+async function call(plugin, method, path, req = {}) {
+  const routes = { get: {}, post: {} };
+  plugin.registerWithRouter({ get: (p, fn) => (routes.get[p] = fn), post: (p, fn) => (routes.post[p] = fn) });
+  return new Promise((resolve) => {
+    const res = { statusCode: 200, headersSent: false };
+    res.status = (c) => ((res.statusCode = c), res);
+    res.json = (body) => { res.headersSent = true; resolve({ status: res.statusCode, body }); };
+    routes[method][path]({ query: {}, ...req }, res);
+  });
+}
+
+test("allowlist: seen names become services or domains, picks sync to the router", async (t) => {
+  const app = fakeApp();
+  const cache = [
+    { name: "mmg.whatsapp.net", type: "A" }, { name: "registry-1.docker.io", type: "A" }, { name: "auth.docker.io", type: "A" },
+    { name: "0.pool.ntp.org", type: "A" }, { name: "88.168.192.in-addr.arpa", type: "PTR" }, { name: "news.example.co.uk.", type: "A" },
+    // A CNAME's target is not a lookup of its own.
+    { name: "www.example.org", type: "CNAME", data: "edge.cdn-example.net" }, { name: "edge.cdn-example.net", type: "A" },
+  ];
+  const { fake, plugin } = await start(t, app, defconf({ tables: { "ip/dns/cache/all": cache } }));
+
+  let { body } = await call(plugin, "get", "/allowlist");
+  const whatsapp = body.services.find((s) => s.id === "whatsapp");
+  assert.equal(whatsapp.allowed, false);
+  assert.equal(whatsapp.seen.days, 1);
+  assert.deepEqual(whatsapp.names, ["mmg.whatsapp.net"]);
+  assert.ok(whatsapp.categories.includes("category-communication"));
+  // v2fly knows Docker; the rest is grouped by domain. Fixed-list names (NTP) and local names are left out.
+  assert.deepEqual(body.services.map((s) => s.id).sort(), ["docker", "whatsapp"]);
+  assert.deepEqual(body.domains.map((d) => d.domain).sort(), ["example.co.uk", "example.org"]);
+
+  const found = await call(plugin, "get", "/catalog", { query: { q: "netfl" } });
+  assert.equal(found.body.services[0].id, "netflix");
+  assert.equal(found.body.services[0].seen, null);
+
+  const bad = await call(plugin, "post", "/allowlist", { body: { services: ["nope"], domains: ["*.x.com"] } });
+  assert.equal(bad.status, 400);
+
+  ({ body } = await call(plugin, "post", "/allowlist", { body: { services: ["telegram"], domains: ["example.co.uk"] } }));
+  assert.equal(body.services.find((s) => s.id === "telegram").allowed, true);
+  const addresses = fake.tables["ip/firewall/address-list"].map((r) => r.address);
+  const names = fake.tables["ip/dns/static"].map((r) => r.name);
+  assert.ok(names.includes("telegram.org") && names.includes("example.co.uk"));
+  // Services only get FWD entries, never address-list entries.
+  assert.ok(!addresses.includes("telegram.org"));
+  assert.equal(fake.flushed, undefined, "no cache flush in normal mode");
+
+  // Unpicking removes only those entries; the rules stay as they are.
+  const rules = JSON.stringify(fake.tables["ip/firewall/filter"]);
+  await call(plugin, "post", "/allowlist", { body: { services: [], domains: ["example.co.uk"] } });
+  assert.ok(!fake.tables["ip/dns/static"].some((r) => r.name === "telegram.org"));
+  assert.ok(fake.tables["ip/dns/static"].some((r) => r.name === "example.co.uk"));
+  assert.equal(JSON.stringify(fake.tables["ip/firewall/filter"]), rules);
+  plugin.stop();
+});
+
+test("while metered, lookups the allowlist doesn't cover are marked blocked", async (t) => {
+  const app = fakeApp();
+  const cache = [{ name: "registry-1.docker.io", type: "A" }, { name: "captive.apple.com", type: "A" }];
+  const { fake, plugin } = await start(t, app, defconf({ tables: { "ip/dns/cache/all": cache } }));
+  let { body } = await call(plugin, "get", "/allowlist");
+  assert.equal(body.services.find((s) => s.id === "docker").seen.blocked, null, "not blocked in normal mode");
+
+  await app.emit("metered"); // samples before switching, so still normal
+  await app.emit("online");
+  await app.emit("metered");
+  await app.emit("online"); // this sample happens while metered
+  ({ body } = await call(plugin, "get", "/allowlist"));
+  assert.ok(body.services.find((s) => s.id === "docker").seen.blocked > 0);
+
+  // Allowing it afterwards; while metered the router's DNS cache is flushed so devices ask again.
+  await app.emit("metered");
+  ({ body } = await call(plugin, "post", "/allowlist", { body: { services: ["docker"], domains: [] } }));
+  assert.equal(body.services.find((s) => s.id === "docker").allowed, true);
+  assert.equal(fake.flushed, 1);
+  plugin.stop();
+});

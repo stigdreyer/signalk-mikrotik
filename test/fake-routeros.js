@@ -4,7 +4,7 @@ const http = require("node:http");
  * In-memory stand-in for the RouterOS v7 REST API, covering only the verbs and
  * paths the plugin uses. Rows are stored with string values, like RouterOS.
  */
-async function fakeRouter({ settings = {}, tables = {}, missing = [] } = {}) {
+async function fakeRouter({ settings = {}, tables = {}, missing = [], rejectAdd = [] } = {}) {
   let next = 1;
   const newId = () => `*${(next++).toString(16).toUpperCase()}`;
   const state = {
@@ -53,6 +53,7 @@ async function fakeRouter({ settings = {}, tables = {}, missing = [] } = {}) {
         return send(200, rows.filter((r) => filters.every(([k, v]) => r[k] === v)));
       }
       if (req.method === "PUT") {
+        if (rejectAdd.includes(path)) return send(400, { detail: "unknown parameter address-list" });
         const { "place-before": before, ...props } = input;
         const row = { ".id": newId(), disabled: "false", ...normalise(props) };
         const at = before ? rows.findIndex((r) => r[".id"] === before) : -1;
@@ -71,6 +72,10 @@ async function fakeRouter({ settings = {}, tables = {}, missing = [] } = {}) {
         if (rows[index].dynamic === "true") return send(400, { detail: "can not remove dynamic item" });
         rows.splice(index, 1);
         return send(204);
+      }
+      if (cmd === "flush") {
+        state.flushed = (state.flushed ?? 0) + 1;
+        return send(200, []);
       }
       if (cmd === "remove") {
         const ids = input[".id"].split(",");
