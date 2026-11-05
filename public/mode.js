@@ -32,6 +32,9 @@
     else document.documentElement.removeAttribute("data-mode");
     for (const b of buttons) b.setAttribute("aria-pressed", b.id === `mode:${choice}`);
     buttons[0].textContent = `Auto · ${vesselMode === "night" ? "night" : "day"}`; // what Auto would show now, even while Night or Day is forced
+    // The phone's status bar and tab strip take the header band's colour, so night mode stays dark up there too.
+    const theme = document.querySelector('meta[name="theme-color"]');
+    if (theme) theme.content = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() || theme.content;
   }
 
   async function poll() {
@@ -46,7 +49,7 @@
   }
 
   // Static markup only, no data, so innerHTML is safe here.
-  const BRAND = '<a class="brand" href="index.html"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 16a8.5 8.5 0 0 1 17 0"/><path d="M6.2 16h-2.7M20.5 16h-2.7M12 7.5V5M6 10l-1.8-1.8M18 10l1.8-1.8"/><path d="M12 16l3.6-4.6"/><circle cx="12" cy="16" r="1.4"/><path d="M3 19.5h18"/></svg><span><span class="brand-name">Metered firewall</span><span class="brand-sub">MikroTik · Signal K</span></span></a>';
+  const BRAND = '<a class="brand" href="index.html"><svg class="mark" viewBox="0 0 256 256" aria-hidden="true"><g transform="translate(0 -1) rotate(-45 128 128)"><path class="ring" fill-rule="evenodd" d="M227.87 99A104 104 0 1 0 227.87 157L189.51 157A68 68 0 1 1 189.51 99Z"/><path class="lever" d="M128 110H220A18 18 0 0 1 220 146H128Z"/><path class="lever" d="M94 128A34 34 0 1 0 162 128A34 34 0 1 0 94 128Z"/></g></svg><span><span class="brand-name">MikroTik Data Meter</span><span class="brand-sub">for Signal K</span></span></a>';
   const PAGES = [
     ["index.html", "Data usage", '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16.5h14"/><path d="M5.5 13.5v-3M10 13.5v-7M14.5 13.5V9"/></svg>'],
     ["allowlist.html", "Allowlist", '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6l1.8 1.8L8 4.5"/><path d="M3 13l1.8 1.8L8 11.5"/><path d="M11 6.5h6M11 13.5h6"/></svg>']

@@ -37,11 +37,12 @@ Enforcement happens at the boat's own router and follows the boat's own internet
 - Per-service data volume needs the router's Traffic Flow export; names and volume are kept 14 days.
 - Cost is an estimate from a user-configured price per GB and currency.
 - Everything ships inside the plugin: no CDN, hosted fonts or external scripts.
-- Undecided: whether the Data usage page follows a provider billing cycle instead of calendar months (no billing-cycle setting exists yet).
+- The Data usage page follows the provider's billing cycle from a "Billing day" setting (1 = calendar months).
 
 ## Brand Commitments
 
-- Name in Signal K: "MikroTik metered firewall"; header reads "Metered firewall · MikroTik · Signal K".
+- App name in Signal K: "MikroTik Data Meter" (header: "MikroTik Data Meter · for Signal K"); the focus is data metering, MikroTik is the context. Package: `signalk-mikrotik`. Plugin settings name: "MikroTik metered firewall".
+- Logo: the Valve, a through-hull valve turned part-way open (brand/README.md).
 - Licence EUPL-1.2; v2fly/domain-list-community data under MIT, credited on the Allowlist page.
 
 ## Evidence on Hand

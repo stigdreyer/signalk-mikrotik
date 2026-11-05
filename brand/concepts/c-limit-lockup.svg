@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 256" width="1000" height="256" role="img"><title>Metered firewall lockup (exploration: live text)</title>
+<g transform="translate(0 0)"><g transform="translate(0 10)">
+<g fill="none" stroke="#000" stroke-width="24" stroke-linecap="round">
+<path d="M37.8 182.8A96 96 0 0 1 176 66.86"/>
+<path d="M211.14 102A96 96 0 0 1 218.2 182.8"/>
+</g>
+<path d="M128 150L177.5 100.5" stroke="#000" stroke-width="18" stroke-linecap="round"/>
+<circle cx="128" cy="150" r="20"/>
+</g></g>
+<text x="292" y="150" font-family="system-ui, -apple-system, Helvetica, sans-serif" font-size="92" font-weight="700" letter-spacing="-1">Metered firewall</text>
+<text x="296" y="208" font-family="system-ui, -apple-system, Helvetica, sans-serif" font-size="44" fill="#555">MikroTik · Signal K</text>
+</svg>

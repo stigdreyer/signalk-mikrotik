@@ -1,0 +1,53 @@
+{
+  "brand": "MikroTik Data Meter",
+  "tagline": "for Signal K",
+  "brief": "A Signal K plugin that switches a boat's MikroTik router to an allowlist while the internet is metered (Starlink pay-per-GB), and shows where the data goes. Used by skippers and crew on phones and chart-side tablets, day and night watch.",
+  "adjectives": [
+    "dependable",
+    "calm",
+    "seaworthy",
+    "watchful"
+  ],
+  "criteria": "Success: reads at 16 px, works in one colour and red on black at night, avoids security clichés (shields, padlocks, walls, flames), and means something to people on boats.",
+  "mockups": [
+    "app-icon",
+    "readme",
+    "favicon-tab",
+    "website",
+    "sticker",
+    "terminal"
+  ],
+  "nav": [
+    "Data usage",
+    "Allowlist",
+    "Docs"
+  ],
+  "brand_color": "#C8501C",
+  "greyscale": false,
+  "designer": "signalk-mikrotik",
+  "round": 2,
+  "concepts": [
+    {
+      "name": "Valve",
+      "symbol": "../logo/valve-symbol.svg",
+      "lockup": "../logo/data-meter-horizontal.svg",
+      "symbol_on_tile": "../logo/valve-symbol-reversed.svg",
+      "lockup_on_dark": "../logo/data-meter-horizontal-reversed.svg",
+      "idea": "A boat's through-hull valve (seacock), turned part-way open: the crew decides how much flows.",
+      "rationale": [
+        "A control every sailor knows: open or shut by choice, which is what the plugin does to the router",
+        "Turned 45 degrees, part-way open, it says metered without drawing a speedometer",
+        "Ring, lever and pivot on one 256 grid, one stroke weight; a heavier cut for 16 to 24 px",
+        "The lever carries the colour: the part the crew controls"
+      ],
+      "symbol_on_dark": "../logo/valve-symbol-reversed.svg"
+    }
+  ],
+  "recommendation": "Valve: the chosen direction, refined into masters, colour, lockups and icons.",
+  "next_steps": [
+    "Use the header symbol, favicon and Signal K app icon in the plugin",
+    "Trademark search before publishing to the Signal K appstore",
+    "Optional: draw a custom wordmark instead of DejaVu Sans Bold"
+  ],
+  "tile_color": "#1A1A19"
+}

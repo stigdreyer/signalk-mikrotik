@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MikroTik Data Usage</title>
+<title>Data usage · MikroTik Data Meter</title>
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icons/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#F3F2EF">
 <link rel="stylesheet" href="style.css">
 <script src="mode.js"></script>
 <style>
@@ -20,10 +25,6 @@
   .chart { position: relative; touch-action: pan-y; border-radius: 4px; }
   .legend { display: flex; gap: 14px; font-size: 0.8125rem; color: var(--text-2); margin: 16px 0 8px; }
   .chart svg text.today { fill: var(--text); font-weight: 700; }
-  .tip { position: absolute; z-index: 1; pointer-events: none; white-space: nowrap; font-size: 0.8125rem; font-variant-numeric: tabular-nums;
-    padding: 6px 10px; border-radius: 6px; background: var(--fill); color: var(--on-fill); border: 1px solid var(--text);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); }
-  .tip b { font-weight: 700; }
   .router p { margin: 4px 0; }
   .foot { font-size: 0.8125rem; margin-top: 20px; }
   @media (max-width: 600px) { .cycle h1 { font-size: 1.125rem; } }

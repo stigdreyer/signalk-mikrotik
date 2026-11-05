@@ -10,6 +10,7 @@
   --metered: #eb6834;
   --warn: #b84a1a; /* metered as text: --metered itself is too light for small type */
   --error: #c62828;
+  --brand: #C8501C; /* the logo's lever orange */
   --fill: var(--text); /* selected pills and the main button */
   --on-fill: var(--surface);
 }
@@ -45,6 +46,7 @@
   --warn: #ff4a4a;
   --error: #ff4a4a;
   --fill: #2a0000;
+  --brand: var(--text);
   --on-fill: var(--text);
 }
 
@@ -77,8 +79,10 @@ button { font: inherit; color: var(--text); }
 .appbar { margin: -16px -16px 20px; padding: 12px 16px 0; background: var(--panel); border-bottom: 1px solid var(--grid); }
 .appbar-in { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px 16px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; min-width: 0; }
-.brand .mark { width: 30px; height: 30px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.brand .mark circle { fill: currentColor; }
+/* The Valve symbol (brand/logo): ink ring, orange lever; in night mode both take the night red. */
+.brand .mark { width: 32px; height: 32px; flex: none; }
+.brand .mark .ring { fill: var(--text); }
+.brand .mark .lever { fill: var(--brand); }
 .brand-name { display: block; font-weight: 700; font-size: 1rem; line-height: 1.2; }
 .brand-sub { display: block; font-size: 0.75rem; color: var(--text-2); }
 .modes { justify-self: end; }
@@ -91,8 +95,10 @@ button { font: inherit; color: var(--text); }
 @media (max-width: 600px) {
   .tabs a { flex: 1; padding: 10px 8px; }
 }
-@media (max-width: 360px) {
-  .brand-sub { display: none; }
+@media (max-width: 420px) {
+  /* The name and the mode switch don't fit side by side on a narrow phone: the switch takes its own row. */
+  .appbar-in { grid-template-columns: 1fr; }
+  .modes { justify-self: start; }
 }
 .appbar:empty { min-height: 118px; } /* holds the header's room until mode.js fills it */
 
@@ -133,6 +139,11 @@ input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
 .tile .value { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .tile .sub { font-size: 0.8125rem; }
 .tile.lead { box-shadow: inset 0 0 0 1.5px var(--metered); }
+/* A floating label for the bar under the pointer (Data usage chart, Allowlist share bar). */
+.tip { position: absolute; z-index: 2; pointer-events: none; white-space: nowrap; font-size: 0.8125rem; font-variant-numeric: tabular-nums;
+  padding: 6px 10px; border-radius: 6px; background: var(--fill); color: var(--on-fill); border: 1px solid var(--text);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); }
+.tip b { font-weight: 700; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
 .chart { position: relative; margin-top: 16px; }
 svg { display: block; width: 100%; height: auto; overflow: visible; }

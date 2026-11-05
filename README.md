@@ -1,4 +1,11 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/logo/data-meter-horizontal-reversed.svg">
+  <img src="brand/logo/data-meter-horizontal.svg" alt="MikroTik Data Meter for Signal K" width="420">
+</picture>
+
 # signalk-mikrotik
+
+**MikroTik Data Meter** in Signal K: data metering for a MikroTik router on a metered connection.
 
 > **Status: early development.** Phase 1 (the profile switch) is implemented
 > and has been piloted on one router (hAP ax S, RouterOS 7.25). Phase 2 (the
@@ -167,6 +174,11 @@ as their DNS server, so hand out the router first via DHCP if you want to
 build your list in port. The easiest way: a short session in port using each
 app the way you would at sea, including the Starlink app (open Data Usage,
 toggle a setting), then pick from the list.
+
+## Logo
+
+The Valve: a boat's through-hull valve, turned part-way open. Masters, icons and
+usage rules are in [brand/](brand/README.md).
 
 ## Night mode
 

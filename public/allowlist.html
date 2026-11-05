@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MikroTik Allowlist</title>
+<title>Allowlist · MikroTik Data Meter</title>
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icons/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#F3F2EF">
 <link rel="stylesheet" href="style.css">
 <script src="mode.js"></script>
 <style>
@@ -21,6 +26,8 @@
   .seg-share { border: none; padding: 0; min-width: 3px; cursor: pointer; background: var(--normal); }
   .seg-share.blocked { background: repeating-linear-gradient(135deg, var(--line) 0 3px, var(--panel) 3px 7px); }
   .seg-share:focus-visible { outline-offset: -2px; }
+  .sharewrap { position: relative; }
+  .seg-share.on { box-shadow: inset 0 0 0 2px var(--text); } /* the segment the label is about */
   .keys { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--text-2); margin-top: 8px; font-variant-numeric: tabular-nums; }
   .key b { color: var(--text); font-weight: 600; }
   .key::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--normal); }
@@ -87,7 +94,10 @@
       <h2 id="sharetitle">…</h2>
       <div class="share-tools"><span class="seg" id="period" role="group" aria-label="Data shown" hidden></span><button id="reset" class="linkbtn">Start counting from now</button><span id="resetnote" role="status"></span></div>
     </div>
-    <div class="sharebar" id="sharebar" role="group" aria-label="Data per service; arrow keys move between services"></div>
+    <div class="sharewrap">
+      <div class="sharebar" id="sharebar" role="group" aria-label="Data per service; arrow keys move between services"></div>
+      <div class="tip" id="sharetip" hidden></div>
+    </div>
     <div class="keys" id="keys"></div>
     <p class="note muted" id="sharenote" hidden></p>
   </section>
@@ -244,13 +254,13 @@ function renderShare(all) {
     const seg = el("button", {
       className: opensAfter(it) ? "seg-share" : "seg-share blocked",
       style: `flex: ${total(it)} 1 0`,
-      title: `${it.title}: ${bytes(total(it))}, ${pct(total(it))}, ${state(it)}`,
       ariaLabel: `${it.title}: ${bytes(total(it))}, ${pct(total(it))}, ${state(it)}. Show in the list.`,
     });
     seg.onclick = () => showRow(it);
     seg.tabIndex = -1;
+    label(seg, it.title, `${bytes(total(it))} · ${pct(total(it))} · ${state(it)}`);
     return seg;
-  }), ...(rest > 0 ? [el("span", { className: "seg-share blocked", style: `flex: ${rest} 1 0`, title: `Other blocked services: ${bytes(rest)}` })] : []));
+  }), ...(rest > 0 ? [label(el("span", { className: "seg-share blocked", style: `flex: ${rest} 1 0` }), "Other blocked services", `${bytes(rest)} · ${pct(rest)}`)] : []));
   // One tab stop for the whole bar; arrow keys move between segments.
   const segs = [...$("sharebar").querySelectorAll("button")];
   if (segs.length) segs[0].tabIndex = 0;
@@ -271,6 +281,27 @@ function renderShare(all) {
     el("span", { className: "key" }, el("b", { textContent: `Gets through while metered · ${bytes(of(through))}` }), through.length ? `: ${named(through, 3)}` : ": nothing that used data"),
     el("span", { className: "key blocked" }, el("b", { textContent: `Blocked while metered · ${bytes(of(blockedAll))}` }), blockedAll.length ? `: ${named(blockedAll, 3)}` : ""));
   $("sharenote").hidden = true;
+}
+
+/** Name the segment under the pointer (or keyboard focus) in a label just above the bar. */
+function label(seg, name, facts) {
+  const show = () => {
+    const tip = $("sharetip");
+    $("sharebar").querySelector(".on")?.classList.remove("on");
+    seg.classList.add("on");
+    tip.replaceChildren(el("b", { textContent: name }), ` · ${facts}`);
+    tip.hidden = false;
+    const bar = $("sharebar").getBoundingClientRect(), box = seg.getBoundingClientRect();
+    const centre = box.left - bar.left + box.width / 2;
+    tip.style.left = `${Math.max(0, Math.min(centre - tip.offsetWidth / 2, bar.width - tip.offsetWidth))}px`;
+    tip.style.top = `${-tip.offsetHeight - 8}px`;
+  };
+  const hide = () => { seg.classList.remove("on"); $("sharetip").hidden = true; };
+  seg.onpointerenter = (e) => { if (e.pointerType === "mouse") show(); };
+  seg.onpointerleave = hide;
+  seg.onfocus = show;
+  seg.onblur = hide;
+  return seg;
 }
 
 /** Bring a service's row into view, open, and briefly marked. */

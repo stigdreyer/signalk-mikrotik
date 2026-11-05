@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="t"><title id="t">Seacock</title>
+<g transform="translate(-2 0)">
+<path fill-rule="evenodd" d="M223.39 98A100 100 0 1 0 223.39 158L193.45 158A72 72 0 1 1 193.45 98Z"/>
+<path d="M128 112H216A16 16 0 0 1 216 144H128Z"/>
+<circle cx="128" cy="128" r="30"/>
+</g>
+</svg>
