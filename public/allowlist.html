@@ -24,7 +24,8 @@
   .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel); color: var(--text-2); }
   .when { font-size: 13px; color: var(--text-2); white-space: nowrap; text-align: right; }
   .vol { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 64px; text-align: right; }
-  .sortrow { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--text-2); }
+  .sortrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--text-2); }
+  .linkbtn { font: inherit; background: none; border: none; color: var(--text); text-decoration: underline; cursor: pointer; padding: 0; }
   .sortrow select { font: inherit; background: var(--surface); color: var(--text); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
   .blocked { color: var(--metered); }
   .more { font: inherit; font-size: 13px; background: none; border: none; color: var(--text-2); cursor: pointer; padding: 2px 4px; }
@@ -50,6 +51,11 @@
     <div class="sortrow" id="sortrow" hidden>
       <label for="sort">Sort</label>
       <select id="sort"><option value="data">Most data</option><option value="days">Most days seen</option><option value="recent">Recently seen</option></select>
+      <span id="periodbox" hidden style="margin-left: 12px">
+        <label for="period">Data</label>
+        <select id="period"><option value="days"></option><option value="since"></option></select>
+        <button id="reset" class="linkbtn" title="Count data from now on, e.g. right after switching to metered. The daily history stays.">Reset counter</button>
+      </span>
     </div>
   </div>
 
@@ -75,7 +81,7 @@ const ADS = "ads";
 let view;              // last GET /allowlist
 let picked;            // { services: Set, domains: Set } as edited
 let catalogHits = [];  // GET /catalog results for the current search
-const filter = { categories: new Set(), ads: false, q: "", sort: "data" };
+const filter = { categories: new Set(), ads: false, q: "", sort: "data", period: null }; // period: "days" or "since" the reset
 const open = new Set(); // expanded rows
 
 async function api(path, opts = {}) {
@@ -107,7 +113,11 @@ function bytes(n) {
   if (n < 1e9) return `${Math.round(n / 1e6)} MB`;
   return `${(n / 1e9).toFixed(n < 1e10 ? 2 : 1)} GB`;
 }
-const total = (it) => (it.seen?.bytes ? it.seen.bytes[0] + it.seen.bytes[1] : 0);
+const since = () => filter.period === "since";
+const vols = (it) => (since() ? it.seen?.since : it.seen?.bytes) ?? [0, 0]; // [normal, metered]
+const total = (it) => vols(it)[0] + vols(it)[1];
+const at = (ms) => new Date(ms).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const periodText = () => (since() ? `since the reset (${at(view.reset.at)})` : `in the last ${view.keepDays} days`);
 const seenText = (s) => (s ? `seen ${ago(s.last)}${s.days > 1 ? ` · ${s.days} days` : ""}` : "not seen yet");
 
 function el(tag, props = {}, ...children) {
@@ -156,12 +166,12 @@ function row(it, { showBlocked = false } = {}) {
   const when = showBlocked && it.seen?.blocked
     ? el("span", { className: "when blocked", textContent: `blocked ${ago(it.seen.blocked)}` })
     : el("span", { className: "when", textContent: seenText(it.seen) });
-  const vol = view.flows && el("span", { className: "vol", textContent: total(it) ? bytes(total(it)) : "–", title: `Data in the last ${view.keepDays} days` });
+  const vol = view.flows && el("span", { className: "vol", textContent: total(it) ? bytes(total(it)) : "–", title: `Data ${periodText()}` });
   const toggle = el("button", { className: "more", textContent: open.has(id) ? "▴" : "▾", title: "Details", ariaLabel: `Details for ${it.title}` });
   toggle.onclick = () => { open.has(id) ? open.delete(id) : open.add(id); render(); };
   const details = open.has(id) && el("div", { className: "details" },
     it.names?.length && el("div", { textContent: `Looked up: ${it.names.join(", ")}` }),
-    total(it) > 0 && el("div", { textContent: `Data in the last ${view.keepDays} days: ${bytes(total(it))}, of which ${bytes(it.seen.bytes[1])} while metered.` }),
+    total(it) > 0 && el("div", { textContent: `Data ${periodText()}: ${bytes(total(it))}, of which ${bytes(vols(it)[1])} while metered.` }),
     it.kind === "services" && el("div", { textContent: `Allowing it opens ${it.size} v2fly domain${it.size === 1 ? "" : "s"} and their subdomains.` }),
     it.includes?.length && el("div", { textContent: `Includes: ${it.includes.map(prettyId).join(", ")}` }),
     it.parents?.length && el("div", { textContent: `Part of: ${it.parents.map(prettyId).join(", ")}` }),
@@ -214,8 +224,8 @@ function render() {
     section("Blocked while metered", "Looked up while metered and not allowed. Tick to allow.", blocked.map((it) => row(it, { showBlocked: true }))),
     section("Allowed", null, allowed.map((it) => row(it))),
     section(`Seen on board (last ${view.keepDays} days)`,
-      view.flows && total({ seen: { bytes: view.unmatched } }) > 0
-        ? `Plus ${bytes(view.unmatched[0] + view.unmatched[1])} to addresses no DNS lookup explains (hard-coded IPs, DNS over HTTPS).`
+      view.flows && total({ seen: { bytes: view.unmatched, since: view.reset.unmatched } }) > 0
+        ? `Plus ${bytes(total({ seen: { bytes: view.unmatched, since: view.reset.unmatched } }))} ${periodText()} to addresses no DNS lookup explains (hard-coded IPs, DNS over HTTPS).`
         : null,
       rest.map((it) => row(it))),
     section("More from the v2fly catalog", "Not seen on board yet.", fromCatalog.map((it) => row(it))),
@@ -253,12 +263,37 @@ function show(v) {
   $("profile").textContent = v.profile;
   $("sortrow").hidden = false;
   $("sort").querySelector('[value="data"]').hidden = !v.flows;
+  showPeriod();
   $("fixed").replaceChildren(...v.fixed.map((f) => el("div", { className: "item" }, el("div", { className: "title", textContent: f.name }), el("div", { className: "details", style: "margin-left: 0", textContent: f.hosts.join(", ") }))));
   $("credit").textContent = `Services and categories: v2fly/domain-list-community (${(v.v2fly ?? "").slice(0, 7)}), MIT licence.`;
   render();
 }
 
 $("sort").onchange = () => { filter.sort = $("sort").value; render(); };
+
+/** The data period picker: last N days, or since the reset once there was one (preferred, it's what a reset is for). */
+function showPeriod() {
+  filter.period = view.reset.at ? filter.period ?? "since" : "days";
+  $("periodbox").hidden = !view.flows;
+  const [days, sinceOpt] = $("period").options;
+  days.textContent = `Last ${view.keepDays} days`;
+  sinceOpt.textContent = view.reset.at ? `Since ${at(view.reset.at)}` : "Since reset";
+  sinceOpt.hidden = !view.reset.at;
+  $("period").value = filter.period;
+}
+$("period").onchange = () => { filter.period = $("period").value; render(); };
+
+$("reset").onclick = async () => {
+  try {
+    view = await api("/reset", { method: "POST" }); // keeps unsaved ticks: `picked` is left alone
+    filter.period = "since";
+    showPeriod();
+    render();
+    $("status").textContent = `Counting data from ${at(view.reset.at)}.`;
+  } catch (err) {
+    $("message").textContent = err.message;
+  }
+};
 
 let searchTimer;
 $("search").oninput = () => {

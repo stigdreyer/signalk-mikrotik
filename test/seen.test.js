@@ -23,7 +23,7 @@ test("record keeps the last sighting and distinct UTC days; prune drops old days
 test("blocked names get a timestamp, merge reports the latest", () => {
   const s = seen.record({}, ["x.docker.io", "y.docker.io"], T, (n) => n === "y.docker.io");
   assert.equal(s["x.docker.io"].blocked, undefined);
-  assert.deepEqual(seen.merge(Object.values(s)), { last: T, days: 1, blocked: T, bytes: [0, 0] });
+  assert.deepEqual(seen.merge(Object.values(s)), { last: T, days: 1, blocked: T, bytes: [0, 0], since: [0, 0] });
 });
 
 test("catalog finds the v2fly list of a name, also behind Akamai, and groups the rest by domain", () => {
@@ -37,4 +37,14 @@ test("catalog finds the v2fly list of a name, also behind Akamai, and groups the
   assert.equal(catalog.domainOf("registry-1.docker.io"), "docker.io");
   assert.equal(catalog.domainOf("www.bbc.co.uk"), "bbc.co.uk");
   assert.equal(catalog.domainOf("api.met.gov.fj"), "met.gov.fj");
+});
+
+test("bytes count per day and since the reset; a reset keeps the days", () => {
+  const s = {};
+  seen.addBytes(s, "a.example", 100, "normal", T);
+  seen.resetSince(s);
+  seen.addBytes(s, "a.example", 50, "metered", T + 2000, T + 1000);
+  seen.addBytes(s, "a.example", 7, "metered", T + 500, T + 1000); // a flow from before the reset, booked late
+  assert.deepEqual(seen.merge(Object.values(s)).bytes, [100, 57]);
+  assert.deepEqual(seen.merge(Object.values(s)).since, [0, 50]);
 });

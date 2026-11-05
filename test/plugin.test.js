@@ -261,6 +261,12 @@ test("Traffic Flow bytes are booked to the name a device looked up, CDN addresse
   assert.deepEqual(body.services.find((s) => s.id === "whatsapp").seen.bytes, [3000, 0]);
   assert.deepEqual(body.domains.find((d) => d.domain === "example.org").seen.bytes, [5000, 0]);
   assert.deepEqual(body.unmatched, [0, 0], "the unknown address is still waiting for its DNS answer");
+  assert.equal(body.reset.at, 0);
+
+  ({ body } = await call(plugin, "post", "/reset"));
+  assert.ok(body.reset.at > 0);
+  assert.deepEqual(body.services.find((s) => s.id === "whatsapp").seen.since, [0, 0]);
+  assert.deepEqual(body.services.find((s) => s.id === "whatsapp").seen.bytes, [3000, 0], "the days are kept");
   plugin.stop();
 });
 

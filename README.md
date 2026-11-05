@@ -144,6 +144,8 @@ shows:
 - **Data volume** per service and domain over the last 14 days, with the
   metered part, sorted by volume (optional, needs the router's Traffic Flow
   export, see [router-setup.md](docs/router-setup.md#5-optional-traffic-flow-for-data-volume-per-service)).
+  **Reset counter** starts a second count from now, e.g. right after
+  switching to metered, to see what still uses data. The 14-day history stays.
   The router reports every connection, and the plugin books its bytes to the
   name the device looked up, following CNAMEs, so CDN traffic counts for the
   service using it.

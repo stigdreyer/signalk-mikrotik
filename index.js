@@ -97,7 +97,7 @@ function allows(targets, name) {
 }
 
 module.exports = (app) => {
-  let ctx = null; // { client, cfg, ipv6, upstream, profile, usage, seen, allow, addresses, pending, unmatched } while running
+  let ctx = null; // { client, cfg, ipv6, upstream, profile, usage, seen, allow, addresses, pending, unmatched, reset } while running
   let unsubscribe = null;
   let timer = null;
   let stopFlows = null;
@@ -136,6 +136,7 @@ module.exports = (app) => {
       settlePending(now);
       writeJson(dataFile("seen.json"), ctx.seen);
       writeJson(dataFile("unmatched.json"), ctx.unmatched);
+      writeJson(dataFile("reset.json"), ctx.reset);
     } catch (err) {
       app.debug(`DNS sample failed: ${err.message}`);
     }
@@ -150,7 +151,7 @@ module.exports = (app) => {
       if (!remote) continue; // stays on board
       const ip = flows.canonical(remote);
       const name = ctx.addresses.get(ip)?.name;
-      if (name) seen.addBytes(ctx.seen, name, record.bytes, ctx.profile, now);
+      if (name) seen.addBytes(ctx.seen, name, record.bytes, ctx.profile, now, ctx.reset.at);
       else if (ctx.pending.length < MAX_PENDING) ctx.pending.push({ ip, bytes: record.bytes, profile: ctx.profile, t: now });
       else unmatched(record.bytes, ctx.profile, now);
     }
@@ -159,7 +160,7 @@ module.exports = (app) => {
   function settlePending(now) {
     ctx.pending = ctx.pending.filter((f) => {
       const name = ctx.addresses.get(f.ip)?.name;
-      if (name) seen.addBytes(ctx.seen, name, f.bytes, f.profile, f.t);
+      if (name) seen.addBytes(ctx.seen, name, f.bytes, f.profile, f.t, ctx.reset.at);
       else if (now - f.t > FLOW_WAIT_MS) unmatched(f.bytes, f.profile, f.t);
       else return true;
       return false;
@@ -170,8 +171,9 @@ module.exports = (app) => {
 
   /** Bytes to addresses no DNS answer explains (hard-coded IPs, DNS over HTTPS, answers older than a day). */
   function unmatched(bytes, profile, t) {
-    const day = (ctx.unmatched[usage.dayOf(t)] ??= [0, 0]);
-    day[profile === "metered" ? 1 : 0] += bytes;
+    const col = profile === "metered" ? 1 : 0;
+    (ctx.unmatched[usage.dayOf(t)] ??= [0, 0])[col] += bytes;
+    if (t >= ctx.reset.at) ctx.reset.unmatched[col] += bytes;
   }
 
   async function sampleUsage() {
@@ -247,6 +249,7 @@ module.exports = (app) => {
       fixed: [catalog.base, ...(ctx.cfg.starlink ? [{ ...catalog.starlink, hosts: [...catalog.starlink.hosts, ctx.cfg.starlinkSubnet] }] : [])],
       flows: ctx.cfg.flowPort > 0,
       unmatched: Object.values(ctx.unmatched).reduce((a, [n, m]) => [a[0] + n, a[1] + m], [0, 0]),
+      reset: ctx.reset,
       services: Object.entries(byList).map(([id, hits]) => serviceView(id, hits)),
       domains: Object.entries(byDomain).map(([domain, hits]) => ({
         domain,
@@ -281,6 +284,7 @@ module.exports = (app) => {
           client, cfg, allow, ipv6: check.ipv6, upstream: check.upstream,
           usage: usage.load(usageFile()), seen: readJson(dataFile("seen.json"), {}),
           addresses: new Map(), pending: [], unmatched: readJson(dataFile("unmatched.json"), {}),
+          reset: readJson(dataFile("reset.json"), { at: 0, unmatched: [0, 0] }), // at 0: never reset
         };
         if (cfg.flowPort > 0) stopFlows = flows.listen(cfg.flowPort, onFlows, (err) => app.debug(`Traffic Flow: ${err.message}`));
         publish(profile);
@@ -349,6 +353,16 @@ module.exports = (app) => {
           if (ctx.profile === "metered") await ctx.client.command("ip/dns/cache", "flush", {});
           res.json({ ...allowlistView(), sync });
         }).then(() => res.headersSent || res.status(502).json({ error: "saving failed, see plugin status" }));
+      });
+      r.post("/reset", (req, res) => {
+        if (!ctx) return res.status(503).json({ error: "plugin not running" });
+        run(() => {
+          seen.resetSince(ctx.seen);
+          ctx.reset = { at: Date.now(), unmatched: [0, 0] };
+          writeJson(dataFile("seen.json"), ctx.seen);
+          writeJson(dataFile("reset.json"), ctx.reset);
+          res.json(allowlistView());
+        });
       });
       r.post("/remove", (req, res) => {
         run(async () => {
