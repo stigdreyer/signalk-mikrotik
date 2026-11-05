@@ -59,9 +59,25 @@
     if (!bar) return;
     const here = location.pathname.split("/").pop() || "index.html";
     const tabs = PAGES.map(([href, label, icon]) => `<a href="${href}"${href === here ? ' aria-current="page"' : ""}>${icon}<span>${label}</span></a>`).join("");
-    bar.innerHTML = `<div class="appbar-in">${BRAND}<nav class="tabs" aria-label="Pages">${tabs}</nav></div>`;
+    bar.innerHTML = `<div class="appbar-in"><div class="who">${BRAND}<span class="badge state" id="appstate" role="status" hidden></span></div>` +
+      `<nav class="tabs" aria-label="Pages">${tabs}</nav></div>`;
     bar.querySelector("nav").before(group); // right of the brand, above the tabs
+    showProfile();
   }
+
+  // The router's profile next to the name, on every page: the one thing the crew should always see.
+  let profile = null;
+  function showProfile() {
+    const badge = document.getElementById("appstate");
+    if (!badge || !profile) return;
+    const metered = profile === "metered";
+    badge.hidden = false;
+    badge.className = metered ? "badge state" : "badge state normal";
+    badge.textContent = metered ? "Metered" : "Normal";
+    badge.title = metered ? "Metered: only the allowed services get through" : "Normal: everything gets through";
+  }
+  /** Pages call this with the profile from their data. */
+  window.setRouterProfile = (p) => { profile = p; showProfile(); };
 
   apply(); // before the first paint, so night doesn't flash white
   document.addEventListener("DOMContentLoaded", header);

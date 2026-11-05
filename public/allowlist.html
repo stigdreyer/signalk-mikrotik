@@ -12,8 +12,6 @@
 <link rel="stylesheet" href="style.css">
 <script src="mode.js"></script>
 <style>
-  .summary { background: var(--panel); border-radius: 8px; padding: 10px 12px; margin: 0 0 16px; }
-  .inlinelink { font: inherit; color: inherit; background: none; border: none; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
   html { scroll-padding-bottom: 160px; } /* rows scrolled into view clear the sticky save bar */
 
   /* The data share: one bar of the period's data, a segment per service. Solid gets through while metered,
@@ -34,14 +32,15 @@
   .key.blocked::before { background: repeating-linear-gradient(135deg, var(--line) 0 2px, var(--panel) 2px 4px); outline: 1px solid var(--line); outline-offset: -1px; }
   .share .note { font-size: 0.8125rem; margin: 6px 0 0; }
 
-  main { max-width: 1120px; } /* room for the filter column beside the list */
+  main, .appbar-in { max-width: 1120px; } /* room for the filter column beside the list; the header lines up with it */
   /* Browse: a filter and sort column beside the list (desktop); one "Filter & sort" section above it on phones. */
   .browse { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: start; margin-top: 16px; }
-  .side { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; padding: 12px 4px 24px 0; }
+  /* Sticky beside the list and never taller than the space above the sticky save bar, so its end (Show all,
+     Clear filters) is always reachable without scrolling the list to the bottom. */
+  .side { position: sticky; top: 0; max-height: calc(100vh - var(--savebar, 72px)); overflow-y: auto; padding: 12px 14px 16px 0; } /* right padding: the counts stay clear of an overlay scrollbar */
   .side > details > summary { display: none; }
   .group + .group { margin-top: 20px; }
   .side h2 { font-size: 0.8125rem; font-weight: 600; color: var(--text-2); margin: 0 0 4px; }
-  .side h3 { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin: 12px 0 2px; }
   .opt { display: flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; }
   .opt .n { margin-left: auto; font-size: 0.8125rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .toolbar { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 12px 0 8px; border-bottom: 1px solid var(--grid); }
@@ -96,7 +95,6 @@
 <main>
   <h1 class="sr-only">Allowlist</h1>
   <div id="message" class="error" role="alert"></div>
-  <div class="summary" id="summary">…</div>
 
   <section class="share" id="share" aria-labelledby="sharetitle">
     <div class="share-head">
@@ -141,6 +139,7 @@
       <button id="save" class="primary" disabled>Save</button>
       <button id="discard" class="linkbtn" hidden>Discard changes</button>
       <span id="status" class="muted" role="status"></span>
+      <span id="savedat" class="muted"></span>
     </div>
   </div>
 </main>
@@ -400,7 +399,6 @@ function renderSide(all) {
     // The watch job first: what tried to get out while metered and was stopped.
     blocked && option("blocked", "Stopped lately", blocked, filter.blocked, () => { filter.blocked = !filter.blocked; render(); }),
     ads && option("ads", "Ads / tracking", ads, filter.ads, () => { filter.ads = !filter.ads; render(); }),
-    ranked.length && el("h3", { textContent: "Categories (v2fly)" }),
     shown.map(([label, n]) => option(`cat:${label}`, label, n, filter.categories.has(label), () => {
       filter.categories.has(label) ? filter.categories.delete(label) : filter.categories.add(label);
       render();
@@ -459,19 +457,10 @@ function draw() {
   renderSummary(all);
 }
 
-/** What the router does now (saved state), and what Save would change. */
+/** The router's profile in the header, when it was last saved, and what Save would change. */
 function renderSummary(all) {
-  const on = all.filter(opensNow).filter((it) => !it.allowedVia).map((it) => it.title);
-  const names = on.length > 4 ? [...on.slice(0, 3), `${on.length - 3} more`] : on;
-  const fixed = el("button", { className: "inlinelink", textContent: "the always-allowed lists" });
-  fixed.onclick = () => { $("fixedbox").open = true; $("fixedbox").scrollIntoView({ block: "center" }); };
-  const series = names.length ? `${names.join(", ")} and ` : "only ";
-  const metered = view.profile === "metered";
-  $("summary").replaceChildren(
-    el("strong", { className: metered ? "badge" : "badge normal", textContent: metered ? "Metered now" : "Normal now" }),
-    metered ? `${series[0].toUpperCase()}${series.slice(1)}` : `Everything gets through. While metered, ${series}`, fixed,
-    metered ? " get through." : " will.",
-    view.savedAt ? el("span", { className: "muted", textContent: ` Router updated ${dated(view.savedAt)}.` }) : "");
+  setRouterProfile(view.profile);
+  $("savedat").textContent = view.savedAt ? `Router updated ${dated(view.savedAt)}` : "";
   renderPending(all);
 }
 
@@ -545,6 +534,9 @@ $("search").oninput = () => {
 };
 
 $("discard").onclick = () => show(view);
+// The save bar's height changes with its preview text; the filter column keeps clear of it.
+new ResizeObserver(([entry]) => document.documentElement.style.setProperty("--savebar", `${Math.ceil(entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight)}px`))
+  .observe(document.querySelector(".savebar"));
 $("clearfilters").onclick = () => { filter.categories.clear(); filter.blocked = filter.ads = false; render(); };
 // The column is always open beside the list; on a phone it folds into one line above it.
 const wide = matchMedia("(min-width: 761px)");

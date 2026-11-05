@@ -43,7 +43,6 @@
 
   <div class="totals" id="totals"></div>
   <div class="meta">
-    <span class="muted">Router profile: <strong id="profile">…</strong></span>
     <span class="setting">Days in <span class="seg" id="zone" role="group" aria-label="Days in"></span></span>
   </div>
   <p id="hint" class="muted" hidden></p>
@@ -303,8 +302,7 @@ async function load() {
     : [keyOf(Date.now() - 33 * DAY), keyOf(Date.now() + DAY)]; // first load: no billing day yet, but a cycle is at most 31 days
   try {
     data = await get(`/usage?from=${span[0]}&to=${span[1]}`);
-    $("profile").textContent = data.profile;
-    $("profile").className = data.profile === "metered" ? "badge" : "badge normal";
+    setRouterProfile(data.profile);
     $("message").textContent = "";
     render();
   } catch (err) {
