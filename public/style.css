@@ -127,6 +127,11 @@ input[type="checkbox"]::before { content: ""; width: 11px; height: 11px; clip-pa
 input[type="checkbox"]:checked { background: var(--text); border-color: var(--text); }
 input[type="checkbox"]:checked::before { transform: scale(1); }
 input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
+input[type="radio"] { appearance: none; margin: 0; flex: none; width: 20px; height: 20px; border: 2px solid var(--text-2); border-radius: 50%;
+  background: var(--surface); display: inline-grid; place-content: center; cursor: pointer; }
+input[type="radio"]::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--text); transform: scale(0); }
+input[type="radio"]:checked { border-color: var(--text); }
+input[type="radio"]:checked::before { transform: scale(1); }
 :root[data-mode="night"] input[type="checkbox"]:checked { background: var(--fill); }
 :root[data-mode="night"] input[type="checkbox"]:checked::before { background: var(--text); }
 :root[data-mode="night"] input[type="search"]::-webkit-search-cancel-button { display: none; }

@@ -34,11 +34,18 @@
   .key.blocked::before { background: repeating-linear-gradient(135deg, var(--line) 0 2px, var(--panel) 2px 4px); outline: 1px solid var(--line); outline-offset: -1px; }
   .share .note { font-size: 0.8125rem; margin: 6px 0 0; }
 
-  .toolbar { background: var(--surface); padding: 12px 0 8px; border-bottom: 1px solid var(--grid); margin-top: 16px; }
+  main { max-width: 1120px; } /* room for the filter column beside the list */
+  /* Browse: a filter and sort column beside the list (desktop); one "Filter & sort" section above it on phones. */
+  .browse { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: start; margin-top: 16px; }
+  .side { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; padding: 12px 4px 24px 0; }
+  .side > details > summary { display: none; }
+  .group + .group { margin-top: 20px; }
+  .side h2 { font-size: 0.8125rem; font-weight: 600; color: var(--text-2); margin: 0 0 4px; }
+  .side h3 { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin: 12px 0 2px; }
+  .opt { display: flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; }
+  .opt .n { margin-left: auto; font-size: 0.8125rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .toolbar { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 12px 0 8px; border-bottom: 1px solid var(--grid); }
   input[type="search"] { font: inherit; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
-  .chips { flex-wrap: wrap; margin-top: 8px; }
-  .chip .n { color: var(--text-2); margin-left: 4px; font-variant-numeric: tabular-nums; }
-  .chip[aria-pressed="true"] .n { color: inherit; opacity: 0.75; }
   .linkbtn { font-size: 0.8125rem; background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 2px; min-height: 44px; }
 
   .item { border-bottom: 1px solid var(--grid); transition: background 1.2s ease-out; }
@@ -73,12 +80,14 @@
   #status.error { border: 1px solid currentColor; border-radius: 6px; padding: 4px 8px; }
   #lists[aria-busy="true"], #share[aria-busy="true"] { opacity: 0.45; }
 
-  @media (min-width: 601px) { .toolbar { position: sticky; top: 0; z-index: 1; } }
-  @media (max-width: 600px) {
-    .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 8px -16px 0; padding: 2px 16px;
-      mask-image: linear-gradient(to right, #000 85%, transparent); -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); }
-    .chips::-webkit-scrollbar { display: none; }
+  @media (max-width: 760px) {
+    .browse { grid-template-columns: 1fr; gap: 0; }
+    .side { position: static; max-height: none; overflow: visible; padding: 0; border-bottom: 1px solid var(--grid); }
+    .side > details > summary { display: list-item; min-height: 44px; padding: 12px 0; font-size: 0.875rem; color: var(--text-2); }
+    .side > details[open] { padding-bottom: 12px; }
+    .toolbar { position: static; }
   }
+  @media (pointer: coarse) { .opt { min-height: 44px; } }
   @media (prefers-reduced-motion: reduce) { .item, .switch::after { transition: none; } }
 </style>
 </head>
@@ -102,12 +111,21 @@
     <p class="note muted" id="sharenote" hidden></p>
   </section>
 
-  <div class="toolbar">
-    <input type="search" id="search" placeholder="Search services or domains" aria-label="Search seen services and the v2fly catalog" autocomplete="off">
-    <div class="pills chips" id="chips"></div>
+  <div class="browse">
+    <aside class="side" aria-label="Filter and sort">
+      <details id="sidebox">
+        <summary id="sidesum">Filter &amp; sort</summary>
+        <div class="group"><h2 id="sorttitle">Sort by</h2><div id="sort" role="radiogroup" aria-labelledby="sorttitle"></div></div>
+        <div class="group"><h2>Show</h2><div id="filters"></div><button id="clearfilters" class="linkbtn" hidden>Clear filters</button></div>
+      </details>
+    </aside>
+    <div>
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Search services or domains" aria-label="Search seen services and the v2fly catalog" autocomplete="off">
+      </div>
+      <div id="lists"></div>
+    </div>
   </div>
-
-  <div id="lists"></div>
 
   <section>
     <details id="fixedbox">
@@ -134,7 +152,10 @@ const SHARE_MIN = 0.03;          // services below 3% of the period's data join 
 let view;              // last GET /allowlist
 let picked;            // { services: Set, domains: Set } as edited
 let catalogHits = [];  // GET /catalog results for the current search
-const filter = { categories: new Set(), ads: false, blocked: false, q: "", period: null }; // period: "days" or "since" the reset
+const filter = { categories: new Set(), ads: false, blocked: false, q: "", period: null, sort: "data" }; // period: "days" or "since" the reset; categories by label
+const SORTS = [["data", "Most data"], ["name", "Name, A–Z"], ["recent", "Recently seen"], ["days", "Most days seen"]];
+const CATEGORIES_SHOWN = 12; // the long tail folds behind "Show all"
+let allCategories = false;
 const open = new Set(); // rows with their details open
 let flashed = new Set(); // rows just saved, marked for a moment
 let catalogFailed = false;
@@ -161,7 +182,11 @@ const BRANDS = {
 };
 const words = (s) => s.split("-").map((w, i) => BRANDS[w] ?? ACRONYMS[w] ?? (i ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
 const prettyId = (id) => words(id);
-const prettyCategory = (c) => words(c.replace(/^category-/, "").replace(/-!cn$/, ""));
+// v2fly's short category ids, in words a crew would use.
+const CATEGORY_NAMES = { cas: "Certificate authorities", orgs: "Organisations", netdisk: "Cloud storage", voip: "VoIP",
+  "ip-geo-detect": "IP geolocation", dev: "Developer tools", "password-management": "Password managers", "web-archive": "Web archives",
+  "consent-management": "Cookie consent", "social-media": "Social media", "ai-chat": "AI chat", cdn: "CDN" };
+const prettyCategory = (c) => { const id = c.replace(/^category-/, "").replace(/-!cn$/, ""); return CATEGORY_NAMES[id] ?? words(id); };
 
 function ago(ms) {
   const min = Math.round((Date.now() - ms) / 60_000);
@@ -214,7 +239,7 @@ const blockedNow = (it) => !!it.seen?.blocked && !opensNow(it);
 function matches(it) {
   if (filter.ads ? !isAds(it) : isAds(it) && !isPicked(it)) return false; // ads stay out unless asked for (or switched on)
   if (filter.blocked && !blockedNow(it)) return false;
-  if (filter.categories.size && !it.categories.some((c) => filter.categories.has(c))) return false;
+  if (filter.categories.size && !it.categories.some((c) => useful(c) && filter.categories.has(prettyCategory(c)))) return false;
   const q = filter.q;
   return !q || it.title.toLowerCase().includes(q) || it.key.includes(q) || (it.names ?? []).some((n) => n.includes(q));
 }
@@ -345,23 +370,45 @@ function row(it, sum) {
   return el("div", { className: flashed.has(id) ? "item flash" : "item", id: `row:${id}` }, el("div", { className: "line" }, name, gb, sw), details);
 }
 
-function renderChips(all) {
-  const counts = {};
-  for (const it of all) for (const c of it.categories) if (useful(c) && !c.startsWith("category-ads")) counts[c] = (counts[c] ?? 0) + 1;
-  const chip = (key, label, n, pressed, onclick) =>
-    Object.assign(el("button", { className: "pill chip", id: `chip:${key}`, ariaPressed: pressed }, label, el("span", { className: "n", textContent: n })), { onclick });
+/** The filter and sort column: sort as radios, filters as checkboxes with counts. */
+function renderSide(all) {
+  $("sort").replaceChildren(...SORTS.map(([v, label]) => {
+    const input = el("input", { type: "radio", name: "sort", id: `sort:${v}`, checked: filter.sort === v });
+    input.onchange = () => { filter.sort = v; render(); };
+    return el("label", { className: "opt" }, input, label);
+  }));
+  const option = (id, label, n, checked, onchange) => {
+    const input = el("input", { type: "checkbox", id: `filter:${id}`, checked });
+    input.onchange = onchange;
+    return el("label", { className: "opt" }, input, label, el("span", { className: "n", textContent: n }));
+  };
+  // Categories merge by their readable name: v2fly's "games" and "games-!cn" are one choice here.
+  const counts = new Map();
+  for (const it of all) {
+    for (const label of new Set(it.categories.filter((c) => useful(c) && !c.startsWith("category-ads")).map(prettyCategory))) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+  const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const shown = allCategories ? ranked : ranked.filter(([label], i) => i < CATEGORIES_SHOWN || filter.categories.has(label));
   const blocked = all.filter(blockedNow).length;
-  const chips = [
+  const ads = all.filter(isAds).length;
+  const more = ranked.length > shown.length || allCategories && ranked.length > CATEGORIES_SHOWN;
+  const toggle = more && el("button", { className: "linkbtn", id: "morecats", textContent: allCategories ? "Show fewer" : `Show all ${ranked.length}` });
+  if (toggle) toggle.onclick = () => { allCategories = !allCategories; render(); };
+  $("filters").replaceChildren(...[
     // The watch job first: what tried to get out while metered and was stopped.
-    ...(blocked ? [chip("blocked", "Stopped lately", blocked, filter.blocked, () => { filter.blocked = !filter.blocked; render(); })] : []),
-    ...Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => chip(c, prettyCategory(c), n, filter.categories.has(c), () => {
-      filter.categories.has(c) ? filter.categories.delete(c) : filter.categories.add(c);
+    blocked && option("blocked", "Stopped lately", blocked, filter.blocked, () => { filter.blocked = !filter.blocked; render(); }),
+    ads && option("ads", "Ads / tracking", ads, filter.ads, () => { filter.ads = !filter.ads; render(); }),
+    ranked.length && el("h3", { textContent: "Categories (v2fly)" }),
+    shown.map(([label, n]) => option(`cat:${label}`, label, n, filter.categories.has(label), () => {
+      filter.categories.has(label) ? filter.categories.delete(label) : filter.categories.add(label);
       render();
     })),
-  ];
-  const ads = all.filter(isAds).length;
-  if (ads) chips.push(chip("ads", "Ads / tracking", ads, filter.ads, () => { filter.ads = !filter.ads; render(); }));
-  $("chips").replaceChildren(...chips);
+    toggle].flat().filter((c) => c instanceof Node));
+  const active = filter.categories.size + (filter.blocked ? 1 : 0) + (filter.ads ? 1 : 0);
+  $("clearfilters").hidden = !active;
+  $("sidesum").textContent = `Filter & sort · ${SORTS.find(([v]) => v === filter.sort)[1]}${active ? ` · ${plural(active, "filter")}` : ""}`;
 }
 
 function render() {
@@ -373,10 +420,16 @@ function render() {
 
 function draw() {
   const all = items();
-  renderChips(all);
+  renderSide(all);
   renderShare(all);
   const sum = all.reduce((a, it) => a + total(it), 0);
-  const order = (a, b) => total(b) - total(a) || (b.seen?.blocked ?? 0) - (a.seen?.blocked ?? 0) || (b.seen?.days ?? 0) - (a.seen?.days ?? 0) || a.title.localeCompare(b.title);
+  const by = {
+    data: (a, b) => total(b) - total(a),
+    name: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+    recent: (a, b) => (b.seen?.last ?? 0) - (a.seen?.last ?? 0),
+    days: (a, b) => (b.seen?.days ?? 0) - (a.seen?.days ?? 0),
+  };
+  const order = (a, b) => by[filter.sort](a, b) || by.data(a, b) || by.name(a, b);
   const shown = all.filter(matches).sort(order);
   const known = new Set(all.filter((it) => it.kind === "services").map((it) => it.key));
   const fromCatalog = catalogHits.filter((s) => !known.has(s.id)).map((s) => ({ kind: "services", key: s.id, title: prettyId(s.id), ...s }));
@@ -492,6 +545,12 @@ $("search").oninput = () => {
 };
 
 $("discard").onclick = () => show(view);
+$("clearfilters").onclick = () => { filter.categories.clear(); filter.blocked = filter.ads = false; render(); };
+// The column is always open beside the list; on a phone it folds into one line above it.
+const wide = matchMedia("(min-width: 761px)");
+const syncSide = () => { if (wide.matches) $("sidebox").open = true; };
+wide.addEventListener("change", syncSide);
+syncSide();
 
 $("save").onclick = async () => {
   const body = { services: [...picked.services], domains: [...picked.domains] };

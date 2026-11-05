@@ -158,8 +158,9 @@ shows:
   service using it.
 - **Search** filters what was seen and also searches the whole v2fly catalog,
   so you can allow a service before anyone used it.
-- **Category chips** from v2fly filter the list; ads and tracking are hidden
-  unless you show them.
+- **Filter & sort** (a column beside the list; one fold-out line on a phone):
+  sort by data, name, recently seen or days seen, and filter by "Stopped lately",
+  ads and tracking (hidden unless you ask for them) or v2fly categories.
 - **Always allowed:** the fixed lists, for reference.
 
 Names that are only CNAME targets (CDN hosts) are left out: nobody asked for
