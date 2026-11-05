@@ -3,10 +3,15 @@
   --panel: #f3f2ef;
   --text: #0b0b0b;
   --text-2: #52514e;
-  --grid: #e2e1dc;
+  --grid: #e2e1dc; /* chart lines and dividers */
+  --line: #898883; /* control outlines: 3:1, so fields and buttons show their edges */
   --normal: #2a78d6;
+  --normal-bar: #5b8fd8; /* normal data in charts: quieter than metered, still 3:1 against the page */
   --metered: #eb6834;
+  --warn: #b84a1a; /* metered as text: --metered itself is too light for small type */
   --error: #c62828;
+  --fill: var(--text); /* selected pills and the main button */
+  --on-fill: var(--surface);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -16,50 +21,127 @@
     --text: #f0efec;
     --text-2: #c3c2b7;
     --grid: #383835;
+    --line: #6f6e69;
     --normal: #3987e5;
+    --normal-bar: #2f6cb8;
     --metered: #d95926;
+    --warn: #e8713e;
     --error: #ef7070;
   }
 }
-* { box-sizing: border-box; }
-body { margin: 0; padding: 16px; background: var(--surface); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
-main { max-width: 900px; margin: 0 auto; }
-h1 { font-size: 20px; margin: 0 0 4px; }
-.muted { color: var(--text-2); }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
-.tabs button { font: inherit; padding: 4px 12px; border: 1px solid var(--grid); border-radius: 16px; background: none; color: var(--text); cursor: pointer; }
-.tabs button[aria-selected="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
-.tile { background: var(--panel); border-radius: 8px; padding: 12px; }
-.tile .value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
-.chart { position: relative; margin-top: 16px; }
-svg { display: block; width: 100%; height: auto; overflow: visible; }
-svg text { fill: var(--text-2); font-size: 11px; }
-.tip { position: absolute; pointer-events: none; background: var(--text); color: var(--surface); padding: 6px 8px; border-radius: 6px; font-size: 13px; white-space: nowrap; display: none; }
-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-th, td { text-align: right; padding: 2px 8px; border-bottom: 1px solid var(--grid); }
-th:first-child, td:first-child { text-align: left; }
-.error { color: var(--error); }
-section { margin-top: 24px; }
-h2 { font-size: 16px; margin: 0 0 8px; }
-nav { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
-nav a { color: var(--text-2); text-decoration: none; }
-nav a[aria-current] { color: var(--text); font-weight: 600; }
-
-input[type="checkbox"] { accent-color: var(--text); }
-.modebtn { margin-left: auto; font: inherit; font-size: 13px; padding: 2px 10px; border: 1px solid var(--grid); border-radius: 14px; background: none; color: var(--text-2); cursor: pointer; }
-
-/* Night: red on black only, so nobody on watch loses their night vision. Series stay apart by lightness. */
+/* Night: red on black only, so nobody on watch loses their night vision. Body text 4.5:1 and secondary 3.5:1,
+   readable on a moving phone. With one hue, states differ by shape and weight (badges, dashed borders), not colour. */
 :root[data-mode="night"] {
   color-scheme: dark;
   --surface: #000000;
   --panel: #140000;
-  --text: #c81e1e;
-  --text-2: #861414;
-  --grid: #2e0707;
-  --normal: #6e0f0f;
-  --metered: #e23434;
+  --text: #e02a2a;
+  --text-2: #c02020;
+  --grid: #3a0909;
+  --line: #b01c1c;
+  --normal: #b01c1c;
+  --normal-bar: #b01c1c;
+  --metered: #ff4a4a;
+  --warn: #ff4a4a;
   --error: #ff4a4a;
+  --fill: #2a0000;
+  --on-fill: var(--text);
 }
-:root[data-mode="night"] ::placeholder { color: var(--text-2); }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; } /* components set display; hidden must still win */
+html { scrollbar-color: var(--grid) var(--surface); }
+body { margin: 0; padding: 16px; background: var(--surface); color: var(--text); font: 0.9375rem/1.4 system-ui, sans-serif; /* rem throughout, so the phone's text-size setting applies */ }
+::selection { background: var(--text); color: var(--surface); }
+::placeholder { color: var(--text-2); opacity: 1; }
+:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+main { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 1.25rem; margin: 0 0 4px; }
+h2 { font-size: 1rem; margin: 0 0 8px; }
+p { max-width: 56ch; text-wrap: pretty; } /* ch is a "0": 56ch holds about 75 characters of prose */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+section { margin-top: 24px; }
+.muted { color: var(--text-2); }
+.error { color: var(--error); }
+.warn { color: var(--warn); }
+/* State as a shape, not only a colour: night mode has one hue. */
+.badge { display: inline-block; font-size: 0.8125rem; font-weight: 700; padding: 0 6px; margin-right: 6px; border: 1.5px solid var(--warn); border-radius: 4px; }
+.badge.normal { border-color: var(--text-2); }
+.textlink { color: var(--text); text-underline-offset: 3px; display: inline-block; padding: 6px 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+summary { cursor: pointer; padding: 6px 0; }
+button { font: inherit; color: var(--text); }
+
+/* App bar: who this is, then the two pages as tabs. The current tab carries a bar and bold type, so it reads as
+   "you are here" without relying on colour. */
+.appbar { margin: -16px -16px 20px; padding: 12px 16px 0; background: var(--panel); border-bottom: 1px solid var(--grid); }
+.appbar-in { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px 16px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; min-width: 0; }
+.brand .mark { width: 30px; height: 30px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.brand .mark circle { fill: currentColor; }
+.brand-name { display: block; font-weight: 700; font-size: 1rem; line-height: 1.2; }
+.brand-sub { display: block; font-size: 0.75rem; color: var(--text-2); }
+.modes { justify-self: end; }
+.tabs { grid-column: 1 / -1; display: flex; gap: 4px; margin-bottom: -1px; }
+.tabs a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px;
+  color: var(--text-2); text-decoration: none; font-weight: 500; border-radius: 8px 8px 0 0; }
+.tabs a svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tabs a:hover { color: var(--text); background: var(--surface); }
+.tabs a[aria-current="page"] { color: var(--text); font-weight: 700; box-shadow: inset 0 -3px 0 var(--text); }
+@media (max-width: 600px) {
+  .tabs a { flex: 1; padding: 10px 8px; }
+}
+@media (max-width: 360px) {
+  .brand-sub { display: none; }
+}
+.appbar:empty { min-height: 118px; } /* holds the header's room until mode.js fills it */
+
+/* Pills: a row of separate choices (months, filter chips). */
+.pills { display: flex; gap: 6px; }
+.pill { font-size: 0.875rem; padding: 6px 12px; min-height: 32px; border: 1px solid var(--line); border-radius: 16px; background: none; cursor: pointer; white-space: nowrap; }
+.pill[aria-pressed="true"] { background: var(--fill); color: var(--on-fill); border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); font-weight: 600; }
+/* One row that scrolls sideways instead of wrapping into a wall. */
+.scroller { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 2px 16px; }
+.scroller::-webkit-scrollbar { display: none; }
+
+/* Segmented control: one setting with two or three values (sort, data period, time zone). */
+.seg { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font-size: 0.8125rem; padding: 6px 10px; min-height: 32px; border: none; background: none; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.seg button + button { border-left: 1px solid var(--line); }
+/* Selected by shape as well as fill: an underline bar, so it reads in night mode's single red too. */
+.seg button[aria-pressed="true"] { background: var(--fill); color: var(--on-fill); font-weight: 600; box-shadow: inset 0 -3px 0 var(--text); }
+.setting { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.8125rem; color: var(--text-2); white-space: nowrap; }
+
+/* Checkboxes drawn from the palette, so night mode has no grey or white native box. */
+input[type="checkbox"] {
+  appearance: none; margin: 0; flex: none; width: 20px; height: 20px; border: 2px solid var(--text-2); border-radius: 4px;
+  background: var(--surface); display: inline-grid; place-content: center; cursor: pointer;
+}
+input[type="checkbox"]::before { content: ""; width: 11px; height: 11px; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); background: var(--surface); transform: scale(0); }
+input[type="checkbox"]:checked { background: var(--text); border-color: var(--text); }
+input[type="checkbox"]:checked::before { transform: scale(1); }
+input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
+:root[data-mode="night"] input[type="checkbox"]:checked { background: var(--fill); }
+:root[data-mode="night"] input[type="checkbox"]:checked::before { background: var(--text); }
+:root[data-mode="night"] input[type="search"]::-webkit-search-cancel-button { display: none; }
+
+.primary { padding: 8px 18px; min-height: 40px; border-radius: 8px; border: 1px solid var(--text); background: var(--fill); color: var(--on-fill); font-weight: 600; cursor: pointer; }
+.primary:disabled { background: none; color: var(--text-2); border: 1px dashed var(--text-2); font-weight: 400; cursor: default; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.tile { background: var(--panel); border-radius: 8px; padding: 12px; }
+.tile .value { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .sub { font-size: 0.8125rem; }
+.tile.lead { box-shadow: inset 0 0 0 1.5px var(--metered); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.chart { position: relative; margin-top: 16px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--text-2); font-size: 0.6875rem; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 2px 8px; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+#preflight p { margin: 4px 0; }
+
+@media (pointer: coarse) {
+  .pill, .seg button { min-height: 44px; }
+}

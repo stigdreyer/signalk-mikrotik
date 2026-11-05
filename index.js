@@ -48,6 +48,14 @@ const schema = {
       default: 0,
     },
     currency: { type: "string", title: "Currency", default: "USD" },
+    billingDay: {
+      type: "number",
+      title: "Billing day",
+      description: "Day of the month your provider's billing cycle starts, so the Data usage page lines up with it (Starlink: the date your plan renews). 1 = calendar months.",
+      default: 1,
+      minimum: 1,
+      maximum: 31,
+    },
     flowPort: {
       type: "number",
       title: "Traffic Flow port",
@@ -248,6 +256,9 @@ module.exports = (app) => {
       v2fly: catalog.commit,
       fixed: [catalog.base, ...(ctx.cfg.starlink ? [{ ...catalog.starlink, hosts: [...catalog.starlink.hosts, ctx.cfg.starlinkSubnet] }] : [])],
       flows: ctx.cfg.flowPort > 0,
+      savedAt: ctx.allow.savedAt ?? null,
+      pricePerGb: ctx.cfg.pricePerGb,
+      currency: ctx.cfg.currency,
       unmatched: Object.values(ctx.unmatched).reduce((a, [n, m]) => [a[0] + n, a[1] + m], [0, 0]),
       reset: ctx.reset,
       services: Object.entries(byList).map(([id, hits]) => serviceView(id, hits)),
@@ -318,7 +329,8 @@ module.exports = (app) => {
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         const { from = "", to = "9999" } = req.query;
         const pick = (buckets) => Object.fromEntries(Object.entries(buckets).filter(([k]) => k.slice(0, 10) >= from && k.slice(0, 10) <= to));
-        res.json({ profile: ctx.profile, pricePerGb: ctx.cfg.pricePerGb, currency: ctx.cfg.currency, days: pick(ctx.usage.days), hours: pick(ctx.usage.hours) });
+        const first = Object.keys(ctx.usage.days).sort()[0] ?? null; // so the page knows how far back it can step without fetching it all
+        res.json({ profile: ctx.profile, pricePerGb: ctx.cfg.pricePerGb, currency: ctx.cfg.currency, billingDay: ctx.cfg.billingDay, first, days: pick(ctx.usage.days), hours: pick(ctx.usage.hours) });
       });
       // Search the whole v2fly catalog, for services nobody on board has used yet.
       r.get("/catalog", (req, res) => {
@@ -344,7 +356,7 @@ module.exports = (app) => {
         ];
         if (bad.length) return res.status(400).json({ error: `invalid: ${bad.join(", ")}` });
         run(async () => {
-          ctx.allow = { services: [...new Set(services)], domains: [...new Set(domains)] };
+          ctx.allow = { services: [...new Set(services)], domains: [...new Set(domains)], savedAt: Date.now() };
           writeJson(dataFile("allowlist.json"), ctx.allow);
           const sync = await router.syncHosts(ctx.client, targetsFor(ctx.cfg, ctx.allow), ctx.profile, ctx.upstream);
           for (const w of sync.warnings) app.debug(w);

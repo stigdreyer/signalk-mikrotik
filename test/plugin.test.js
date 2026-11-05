@@ -133,8 +133,10 @@ test("usage is booked to the profile that was active, and served on GET /usage",
   routes["/usage"]({ query: {} }, { json: (b) => (body = b) });
   assert.equal(body.profile, "normal");
   assert.deepEqual(Object.values(body.days)[0], { normal: { rx: 2000, tx: 100 }, metered: { rx: 500, tx: 50 } });
+  const first = Object.keys(body.days)[0];
   routes["/usage"]({ query: { from: "2999-01-01" } }, { json: (b) => (body = b) });
   assert.deepEqual(body.days, {});
+  assert.equal(body.first, first, "the first day is reported even when the range leaves it out");
 
   plugin.stop();
   // Bytes counted while the plugin was down go to the first sample after restart.
@@ -187,6 +189,7 @@ test("allowlist: seen names become services or domains, picks sync to the router
 
   ({ body } = await call(plugin, "post", "/allowlist", { body: { services: ["telegram"], domains: ["example.co.uk"] } }));
   assert.equal(body.services.find((s) => s.id === "telegram").allowed, true);
+  assert.ok(body.savedAt > 0, "the page can say when the router was last updated");
   const addresses = fake.tables["ip/firewall/address-list"].map((r) => r.address);
   const names = fake.tables["ip/dns/static"].map((r) => r.name);
   assert.ok(names.includes("telegram.org") && names.includes("example.co.uk"));

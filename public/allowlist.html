@@ -7,82 +7,128 @@
 <link rel="stylesheet" href="style.css">
 <script src="mode.js"></script>
 <style>
-  .summary { background: var(--panel); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
-  .toolbar { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 8px 0; border-bottom: 1px solid var(--grid); }
-  input[type="search"] { font: inherit; width: 100%; padding: 8px 10px; border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); color: var(--text); }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .chip { font: inherit; font-size: 13px; padding: 3px 10px; border: 1px solid var(--grid); border-radius: 14px; background: none; color: var(--text); cursor: pointer; }
-  .chip[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
-  .chip .n { color: var(--text-2); margin-left: 4px; }
-  .chip[aria-pressed="true"] .n { color: inherit; opacity: 0.7; }
-  .item { border-bottom: 1px solid var(--grid); padding: 8px 0; }
-  .row { display: flex; gap: 10px; align-items: center; }
-  .row input { width: 18px; height: 18px; flex: none; margin: 0; }
-  .row label { flex: 1; min-width: 0; cursor: pointer; }
-  .title { font-weight: 500; }
-  .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
-  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel); color: var(--text-2); }
-  .when { font-size: 13px; color: var(--text-2); white-space: nowrap; text-align: right; }
-  .vol { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 64px; text-align: right; }
-  .sortrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--text-2); }
-  .linkbtn { font: inherit; background: none; border: none; color: var(--text); text-decoration: underline; cursor: pointer; padding: 0; }
-  .sortrow select { font: inherit; background: var(--surface); color: var(--text); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
-  .blocked { color: var(--metered); }
-  .more { font: inherit; font-size: 13px; background: none; border: none; color: var(--text-2); cursor: pointer; padding: 2px 4px; }
-  .details { font-size: 13px; color: var(--text-2); margin: 6px 0 0 28px; overflow-wrap: anywhere; }
+  .summary { background: var(--panel); border-radius: 8px; padding: 10px 12px; margin: 0 0 16px; }
+  .inlinelink { font: inherit; color: inherit; background: none; border: none; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  html { scroll-padding-bottom: 160px; } /* rows scrolled into view clear the sticky save bar */
+
+  /* The data share: one bar of the period's data, a segment per service. Solid gets through while metered,
+     hatched is blocked, so the difference survives night mode's single red. */
+  .share-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; margin-bottom: 8px; }
+  .share-head h2 { margin: 0; font-size: 0.9375rem; }
+  .share-head h2 span { font-weight: 400; color: var(--text-2); }
+  .share-tools { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; font-size: 0.8125rem; }
+  .sharebar { display: flex; gap: 2px; height: 40px; border-radius: 6px; overflow: hidden; }
+  .seg-share { border: none; padding: 0; min-width: 3px; cursor: pointer; background: var(--normal); }
+  .seg-share.blocked { background: repeating-linear-gradient(135deg, var(--line) 0 3px, var(--panel) 3px 7px); }
+  .seg-share:focus-visible { outline-offset: -2px; }
+  .keys { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--text-2); margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .key b { color: var(--text); font-weight: 600; }
+  .key::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--normal); }
+  .key.blocked::before { background: repeating-linear-gradient(135deg, var(--line) 0 2px, var(--panel) 2px 4px); outline: 1px solid var(--line); outline-offset: -1px; }
+  .share .note { font-size: 0.8125rem; margin: 6px 0 0; }
+
+  .toolbar { background: var(--surface); padding: 12px 0 8px; border-bottom: 1px solid var(--grid); margin-top: 16px; }
+  input[type="search"] { font: inherit; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+  .chips { flex-wrap: wrap; margin-top: 8px; }
+  .chip .n { color: var(--text-2); margin-left: 4px; font-variant-numeric: tabular-nums; }
+  .chip[aria-pressed="true"] .n { color: inherit; opacity: 0.75; }
+  .linkbtn { font-size: 0.8125rem; background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 2px; min-height: 44px; }
+
+  .item { border-bottom: 1px solid var(--grid); transition: background 1.2s ease-out; }
+  .item.flash { background: var(--panel); transition: none; }
+  .line { display: flex; align-items: center; gap: 12px; min-height: 56px; }
+  .name { flex: 1; min-width: 0; padding: 8px 0; background: none; border: none; text-align: left; cursor: pointer; }
+  .name .title { font-weight: 500; }
+  .name small { display: block; font-size: 0.8125rem; color: var(--text-2); margin-top: 1px; }
+  .name small .blocked { color: var(--warn); font-weight: 600; }
+  .tag { display: inline-block; font-size: 0.6875rem; padding: 0 6px; margin-left: 6px; border-radius: 4px; border: 1px solid currentColor; color: var(--text); font-weight: 600; vertical-align: 1px; }
+  .tag.closing { border-style: dashed; }
+  .gb { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 64px; }
+  .gb small { display: block; font-size: 0.75rem; color: var(--text-2); }
+  /* A standard switch: on = gets through while metered. */
+  .switch { flex: none; position: relative; width: 48px; height: 28px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); cursor: pointer; padding: 0; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 19px; height: 19px; border-radius: 50%; background: var(--text-2); transition: left 0.15s ease-out; }
+  .switch[aria-checked="true"] { background: var(--fill); border-color: var(--text); }
+  .switch[aria-checked="true"]::after { left: 23px; background: var(--on-fill); }
+  :root[data-mode="night"] .switch[aria-checked="true"]::after { background: var(--text); }
+  .switch:disabled { opacity: 0.55; cursor: default; }
+  .switch::before { content: ""; position: absolute; inset: -9px -2px; } /* 44px tall tap area */
+  .details { font-size: 0.8125rem; color: var(--text-2); margin: 0 0 12px; overflow-wrap: anywhere; }
   .details div { margin-top: 2px; }
-  .savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--grid); padding: 12px 0; display: flex; gap: 12px; align-items: center; }
-  .savebar button { font: inherit; padding: 6px 16px; border-radius: 6px; border: none; background: var(--text); color: var(--surface); cursor: pointer; }
-  .savebar button:disabled { opacity: 0.4; cursor: default; }
-  .empty { padding: 12px 0; }
+  .listnote { font-size: 0.8125rem; }
+  .empty, .add { margin: 12px 0; }
+  .fixed .title { padding-top: 8px; font-weight: 500; }
+
+  .savebar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--grid); padding: 10px 0 12px; margin-top: 16px; }
+  .savebar .pending { font-size: 0.8125rem; margin-bottom: 8px; }
+  .savebar .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  #status.confirm { color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  #status.error { border: 1px solid currentColor; border-radius: 6px; padding: 4px 8px; }
+  #lists[aria-busy="true"], #share[aria-busy="true"] { opacity: 0.45; }
+
+  @media (min-width: 601px) { .toolbar { position: sticky; top: 0; z-index: 1; } }
+  @media (max-width: 600px) {
+    .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 8px -16px 0; padding: 2px 16px;
+      mask-image: linear-gradient(to right, #000 85%, transparent); -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); }
+    .chips::-webkit-scrollbar { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .item, .switch::after { transition: none; } }
 </style>
 </head>
 <body>
+<header class="appbar"></header>
 <main>
-  <nav><a href="index.html">Usage</a><a href="allowlist.html" aria-current="page">Allowlist</a></nav>
-  <h1>Allowed while metered</h1>
-  <div class="muted">Router profile: <strong id="profile">…</strong></div>
-  <div id="message" class="error"></div>
+  <h1 class="sr-only">Allowlist</h1>
+  <div id="message" class="error" role="alert"></div>
   <div class="summary" id="summary">…</div>
 
-  <div class="toolbar">
-    <input type="search" id="search" placeholder="Search seen services, or any service by name (e.g. whatsapp)" autocomplete="off">
-    <div class="chips" id="chips"></div>
-    <div class="sortrow" id="sortrow" hidden>
-      <label for="sort">Sort</label>
-      <select id="sort"><option value="data">Most data</option><option value="days">Most days seen</option><option value="recent">Recently seen</option></select>
-      <span id="periodbox" hidden style="margin-left: 12px">
-        <label for="period">Data</label>
-        <select id="period"><option value="days"></option><option value="since"></option></select>
-        <button id="reset" class="linkbtn" title="Count data from now on, e.g. right after switching to metered. The daily history stays.">Reset counter</button>
-      </span>
+  <section class="share" id="share" aria-labelledby="sharetitle">
+    <div class="share-head">
+      <h2 id="sharetitle">…</h2>
+      <div class="share-tools"><span class="seg" id="period" role="group" aria-label="Data shown" hidden></span><button id="reset" class="linkbtn">Start counting from now</button><span id="resetnote" role="status"></span></div>
     </div>
+    <div class="sharebar" id="sharebar" role="group" aria-label="Data per service; arrow keys move between services"></div>
+    <div class="keys" id="keys"></div>
+    <p class="note muted" id="sharenote" hidden></p>
+  </section>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search services or domains" aria-label="Search seen services and the v2fly catalog" autocomplete="off">
+    <div class="pills chips" id="chips"></div>
   </div>
 
   <div id="lists"></div>
 
   <section>
-    <details>
+    <details id="fixedbox">
       <summary class="muted">Always allowed</summary>
-      <div id="fixed"></div>
+      <div id="fixed" class="fixed"></div>
     </details>
   </section>
   <p class="muted" id="credit"></p>
 
   <div class="savebar">
-    <button id="save" disabled>Save</button>
-    <span id="status" class="muted"></span>
+    <div class="pending" id="pending" hidden></div>
+    <div class="actions">
+      <button id="save" class="primary" disabled>Save</button>
+      <button id="discard" class="linkbtn" hidden>Discard changes</button>
+      <span id="status" class="muted" role="status"></span>
+    </div>
   </div>
 </main>
 <script>
 const API = "/plugins/signalk-mikrotik";
 const $ = (id) => document.getElementById(id);
-const ADS = "ads";
+const SECONDS_PER_ENTRY = 0.03; // measured on a hAP: about 29 ms per DNS entry the router adds
+const SHARE_MIN = 0.03;          // services below 3% of the period's data join "others" in the bar
 let view;              // last GET /allowlist
 let picked;            // { services: Set, domains: Set } as edited
 let catalogHits = [];  // GET /catalog results for the current search
-const filter = { categories: new Set(), ads: false, q: "", sort: "data", period: null }; // period: "days" or "since" the reset
-const open = new Set(); // expanded rows
+const filter = { categories: new Set(), ads: false, blocked: false, q: "", period: null }; // period: "days" or "since" the reset
+const open = new Set(); // rows with their details open
+let flashed = new Set(); // rows just saved, marked for a moment
+let catalogFailed = false;
+let searching = false;  // a catalog search is on its way
 
 async function api(path, opts = {}) {
   const res = await fetch(API + path, {
@@ -96,8 +142,14 @@ async function api(path, opts = {}) {
 }
 
 // v2fly ids and categories read like "apple-update" and "category-ai-chat-!cn".
-const ACRONYMS = { ai: "AI", cdn: "CDN", doh: "DoH", ntp: "NTP", vpn: "VPN", tv: "TV", ddns: "DDNS", ip: "IP", stun: "STUN", ipfs: "IPFS" };
-const words = (s) => s.split("-").map((w, i) => ACRONYMS[w] ?? (i ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
+const ACRONYMS = { ai: "AI", cdn: "CDN", doh: "DoH", ntp: "NTP", vpn: "VPN", tv: "TV", ddns: "DDNS", ip: "IP", stun: "STUN", ipfs: "IPFS", ios: "iOS", aws: "AWS", bbc: "BBC", cnn: "CNN", hbo: "HBO" };
+const BRANDS = {
+  whatsapp: "WhatsApp", youtube: "YouTube", icloud: "iCloud", itunes: "iTunes", openai: "OpenAI", github: "GitHub", gitlab: "GitLab",
+  tiktok: "TikTok", linkedin: "LinkedIn", paypal: "PayPal", playstation: "PlayStation", onedrive: "OneDrive", wechat: "WeChat",
+  soundcloud: "SoundCloud", bytedance: "ByteDance", macos: "macOS", deepl: "DeepL", duckduckgo: "DuckDuckGo", wetransfer: "WeTransfer",
+  dazn: "DAZN", nordvpn: "NordVPN", expressvpn: "ExpressVPN", protonmail: "ProtonMail", xbox: "Xbox", primevideo: "Prime Video",
+};
+const words = (s) => s.split("-").map((w, i) => BRANDS[w] ?? ACRONYMS[w] ?? (i ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
 const prettyId = (id) => words(id);
 const prettyCategory = (c) => words(c.replace(/^category-/, "").replace(/-!cn$/, ""));
 
@@ -113,12 +165,15 @@ function bytes(n) {
   if (n < 1e9) return `${Math.round(n / 1e6)} MB`;
   return `${(n / 1e9).toFixed(n < 1e10 ? 2 : 1)} GB`;
 }
+const plural = (n, one, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+const list = (names) => (names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 const since = () => filter.period === "since";
 const vols = (it) => (since() ? it.seen?.since : it.seen?.bytes) ?? [0, 0]; // [normal, metered]
 const total = (it) => vols(it)[0] + vols(it)[1];
 const at = (ms) => new Date(ms).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
-const periodText = () => (since() ? `since the reset (${at(view.reset.at)})` : `in the last ${view.keepDays} days`);
-const seenText = (s) => (s ? `seen ${ago(s.last)}${s.days > 1 ? ` · ${s.days} days` : ""}` : "not seen yet");
+const dated = (ms) => new Date(ms).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const FQDN = /^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
+const periodText = () => (since() ? `since ${at(view.reset.at)}` : `in the last ${view.keepDays} days`);
 
 function el(tag, props = {}, ...children) {
   const e = Object.assign(document.createElement(tag), props);
@@ -129,13 +184,12 @@ function el(tag, props = {}, ...children) {
 
 /** Services and domains as one kind of row. */
 function items() {
-  const services = view.services.map((s) => ({
-    kind: "services", key: s.id, title: prettyId(s.id), categories: s.categories, ...s,
-  }));
-  const domains = view.domains.map((d) => ({
-    kind: "domains", key: d.domain, title: d.domain, categories: d.category ? [d.category] : [], ...d,
-  }));
-  return [...services, ...domains];
+  const services = view.services.map((s) => ({ kind: "services", key: s.id, title: prettyId(s.id), categories: s.categories, ...s }));
+  const domains = view.domains.map((d) => ({ kind: "domains", key: d.domain, title: d.domain, categories: d.category ? [d.category] : [], ...d }));
+  // Domains typed in and switched on, not looked up on board yet.
+  const typed = [...(picked?.domains ?? [])].filter((d) => !view.domains.some((x) => x.domain === d))
+    .map((d) => ({ kind: "domains", key: d, title: d, domain: d, categories: [], allowed: false, ads: false, seen: null, names: [] }));
+  return [...services, ...domains, ...typed];
 }
 
 // "companies" says nothing, and v2fly's regional lists (-cn, -ir, -ru, …) are about other countries' routing.
@@ -143,116 +197,229 @@ const useful = (c) => c !== "category-companies" && !/-(cn|ir|ru|jp|hk|uk|mm)$/.
 const isAds = (it) => it.ads || it.categories.some((c) => c.startsWith("category-ads"));
 const isPicked = (it) => picked[it.kind].has(it.key);
 const via = (it) => (it.kind === "services" ? [...picked.services].find((p) => p !== it.key && it.parents?.includes(p)) : null);
+const opensNow = (it) => !!(it.allowed || it.allowedVia); // on the router
+const opensAfter = (it) => isPicked(it) || !!via(it);       // after Save
+const blockedNow = (it) => !!it.seen?.blocked && !opensNow(it);
 
 function matches(it) {
-  if (!filter.ads && isAds(it) && !isPicked(it)) return false;
+  if (filter.ads ? !isAds(it) : isAds(it) && !isPicked(it)) return false; // ads stay out unless asked for (or switched on)
+  if (filter.blocked && !blockedNow(it)) return false;
   if (filter.categories.size && !it.categories.some((c) => filter.categories.has(c))) return false;
   const q = filter.q;
   return !q || it.title.toLowerCase().includes(q) || it.key.includes(q) || (it.names ?? []).some((n) => n.includes(q));
 }
 
-function row(it, { showBlocked = false } = {}) {
+function toggle(it) {
+  isPicked(it) ? picked[it.kind].delete(it.key) : picked[it.kind].add(it.key);
+  render();
+}
+
+/** One bar for the period's data, a segment per service, largest first. */
+function renderShare(all) {
+  const used = all.filter((it) => total(it) > 0).sort((a, b) => total(b) - total(a));
+  const sum = used.reduce((a, it) => a + total(it), 0);
+  $("sharetitle").replaceChildren(`Data ${periodText()}`, el("span", { textContent: view.flows ? ` · ${bytes(sum)}` : "" }));
+  $("period").hidden = !view.reset.at;
+  if (view.reset.at) {
+    $("period").replaceChildren(...[["days", `${view.keepDays} days`], ["since", `Since ${at(view.reset.at)}`]].map(([v, label]) =>
+      Object.assign(el("button", { id: `period:${v}`, ariaPressed: filter.period === v, textContent: label }), { onclick: () => { filter.period = v; render(); } })));
+  }
+  if (!view.flows || !sum) {
+    $("sharebar").hidden = $("keys").hidden = true;
+    $("sharenote").hidden = false;
+    $("sharenote").textContent = view.flows
+      ? `No data counted ${periodText()} yet.`
+      : "Data per service needs the router's Traffic Flow export. The Data usage page says how to set it up.";
+    return;
+  }
+  $("sharebar").hidden = $("keys").hidden = false;
+  // What gets through always shows, however small: that is the part of the bar the crew controls while metered.
+  const through = used.filter(opensAfter);
+  const blockedBig = used.filter((it) => !opensAfter(it) && total(it) / sum >= SHARE_MIN).slice(0, 8);
+  const big = [...through, ...blockedBig].sort((a, b) => total(b) - total(a));
+  const rest = sum - big.reduce((a, it) => a + total(it), 0); // only small blocked services are left over
+  const state = (it) => (opensAfter(it) ? "gets through while metered" : "blocked while metered");
+  const pct = (n) => `${Math.max(1, Math.round((n / sum) * 100))}%`;
+  $("sharebar").replaceChildren(...big.map((it) => {
+    const seg = el("button", {
+      className: opensAfter(it) ? "seg-share" : "seg-share blocked",
+      style: `flex: ${total(it)} 1 0`,
+      title: `${it.title}: ${bytes(total(it))}, ${pct(total(it))}, ${state(it)}`,
+      ariaLabel: `${it.title}: ${bytes(total(it))}, ${pct(total(it))}, ${state(it)}. Show in the list.`,
+    });
+    seg.onclick = () => showRow(it);
+    seg.tabIndex = -1;
+    return seg;
+  }), ...(rest > 0 ? [el("span", { className: "seg-share blocked", style: `flex: ${rest} 1 0`, title: `Other blocked services: ${bytes(rest)}` })] : []));
+  // One tab stop for the whole bar; arrow keys move between segments.
+  const segs = [...$("sharebar").querySelectorAll("button")];
+  if (segs.length) segs[0].tabIndex = 0;
+  $("sharebar").onkeydown = (e) => {
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+    const i = segs.indexOf(document.activeElement);
+    if (i < 0 || (!step && e.key !== "Home" && e.key !== "End")) return;
+    e.preventDefault();
+    const next = segs[e.key === "Home" ? 0 : e.key === "End" ? segs.length - 1 : Math.max(0, Math.min(segs.length - 1, i + step))];
+    segs.forEach((s) => (s.tabIndex = s === next ? 0 : -1));
+    next.focus();
+  };
+  // The keys say what the two fills mean, and always name what gets through.
+  const of = (arr) => arr.reduce((a, it) => a + total(it), 0);
+  const blockedAll = used.filter((it) => !opensAfter(it));
+  const named = (arr, n) => arr.slice(0, n).map((it) => `${it.title} ${bytes(total(it))}`).join(", ") + (arr.length > n ? `, ${arr.length - n} more` : "");
+  $("keys").replaceChildren(
+    el("span", { className: "key" }, el("b", { textContent: `Gets through while metered · ${bytes(of(through))}` }), through.length ? `: ${named(through, 3)}` : ": nothing that used data"),
+    el("span", { className: "key blocked" }, el("b", { textContent: `Blocked while metered · ${bytes(of(blockedAll))}` }), blockedAll.length ? `: ${named(blockedAll, 3)}` : ""));
+  $("sharenote").hidden = true;
+}
+
+/** Bring a service's row into view, open, and briefly marked. */
+function showRow(it) {
+  const id = `${it.kind}:${it.key}`;
+  filter.q = ""; $("search").value = ""; filter.categories.clear(); filter.blocked = false;
+  if (isAds(it)) filter.ads = true;
+  open.add(id);
+  flashed = new Set([id]);
+  render();
+  document.getElementById(`row:${id}`)?.scrollIntoView({ block: "center" }); // instant: a smooth scroll can be cut short and leave the row under the save bar
+  document.getElementById(`name:${id}`)?.focus({ preventScroll: true });
+  setTimeout(() => { flashed = new Set(); render(); }, 1800);
+}
+
+function row(it, sum) {
   const id = `${it.kind}:${it.key}`;
   const parent = via(it);
-  const box = el("input", { type: "checkbox", id, checked: isPicked(it) || !!parent, disabled: !!parent && !isPicked(it) });
-  box.onchange = () => {
-    box.checked ? picked[it.kind].add(it.key) : picked[it.kind].delete(it.key);
-    render();
-  };
-  const tags = el("span", { className: "tags" },
-    it.categories.filter(useful).slice(0, 3).map((c) => el("span", { className: "tag", textContent: prettyCategory(c) })),
-    isAds(it) && el("span", { className: "tag", textContent: "Ads / tracking" }),
-    parent && el("span", { className: "tag", textContent: `via ${prettyId(parent)}` }));
-  const when = showBlocked && it.seen?.blocked
-    ? el("span", { className: "when blocked", textContent: `blocked ${ago(it.seen.blocked)}` })
-    : el("span", { className: "when", textContent: seenText(it.seen) });
-  const vol = view.flows && el("span", { className: "vol", textContent: total(it) ? bytes(total(it)) : "–", title: `Data ${periodText()}` });
-  const toggle = el("button", { className: "more", textContent: open.has(id) ? "▴" : "▾", title: "Details", ariaLabel: `Details for ${it.title}` });
-  toggle.onclick = () => { open.has(id) ? open.delete(id) : open.add(id); render(); };
-  const details = open.has(id) && el("div", { className: "details" },
+  const change = opensAfter(it) !== opensNow(it) && el("span", { className: opensAfter(it) ? "tag" : "tag closing", textContent: opensAfter(it) ? "will be allowed" : "will be blocked" });
+  const cats = it.categories.filter(useful).slice(0, 2).map(prettyCategory);
+  const sub = [
+    blockedNow(it) ? el("span", { className: "blocked", textContent: `stopped ${ago(it.seen.blocked)}` }) : null,
+    parent ? `via ${prettyId(parent)}` : null,
+    isAds(it) ? "Ads / tracking" : cats.join(", ") || (it.kind === "domains" ? "domain" : null),
+    !blockedNow(it) ? (it.seen ? `seen ${ago(it.seen.last)}` : "not seen yet") : null,
+  ].filter(Boolean).flatMap((part, i) => (i ? [" · ", part] : [part]));
+  const name = el("button", { className: "name", id: `name:${id}`, ariaExpanded: open.has(id) },
+    el("span", { className: "title", textContent: it.title }), change, el("small", {}, ...sub));
+  name.onclick = () => { open.has(id) ? open.delete(id) : open.add(id); render(); };
+  const gb = view.flows && el("span", { className: "gb" }, total(it) ? bytes(total(it)) : "–", el("small", { textContent: total(it) && sum ? `${Math.max(1, Math.round((total(it) / sum) * 100))}%` : "" }));
+  const sw = el("button", { className: "switch", id, role: "switch", ariaChecked: opensAfter(it), disabled: !!parent && !isPicked(it), ariaLabel: `Allow ${it.title} while metered` });
+  sw.onclick = () => toggle(it);
+  if (open.has(id)) name.setAttribute("aria-controls", `more:${id}`);
+  const details = open.has(id) && el("div", { className: "details", id: `more:${id}` },
     it.names?.length && el("div", { textContent: `Looked up: ${it.names.join(", ")}` }),
     total(it) > 0 && el("div", { textContent: `Data ${periodText()}: ${bytes(total(it))}, of which ${bytes(vols(it)[1])} while metered.` }),
-    it.kind === "services" && el("div", { textContent: `Allowing it opens ${it.size} v2fly domain${it.size === 1 ? "" : "s"} and their subdomains.` }),
+    it.kind === "services" && el("div", { textContent: `Allowing it opens ${plural(it.size, "v2fly domain")} and their subdomains.` }),
     it.includes?.length && el("div", { textContent: `Includes: ${it.includes.map(prettyId).join(", ")}` }),
     it.parents?.length && el("div", { textContent: `Part of: ${it.parents.map(prettyId).join(", ")}` }),
     it.kind === "domains" && el("div", { textContent: "Not in v2fly. Allowing it opens this domain and its subdomains." }));
-  return el("div", { className: "item" },
-    el("div", { className: "row" }, box, el("label", { htmlFor: id }, el("span", { className: "title", textContent: it.title }), tags), when, vol, toggle),
-    details);
-}
-
-function section(title, note, rows) {
-  if (!rows.length) return null;
-  return el("section", {}, el("h2", { textContent: title }), note && el("p", { className: "muted", textContent: note }), rows);
+  return el("div", { className: flashed.has(id) ? "item flash" : "item", id: `row:${id}` }, el("div", { className: "line" }, name, gb, sw), details);
 }
 
 function renderChips(all) {
   const counts = {};
   for (const it of all) for (const c of it.categories) if (useful(c) && !c.startsWith("category-ads")) counts[c] = (counts[c] ?? 0) + 1;
-  const chips = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => {
-    const b = el("button", { className: "chip", ariaPressed: filter.categories.has(c) }, prettyCategory(c), el("span", { className: "n", textContent: n }));
-    b.onclick = () => { filter.categories.has(c) ? filter.categories.delete(c) : filter.categories.add(c); render(); };
-    return b;
-  });
+  const chip = (key, label, n, pressed, onclick) =>
+    Object.assign(el("button", { className: "pill chip", id: `chip:${key}`, ariaPressed: pressed }, label, el("span", { className: "n", textContent: n })), { onclick });
+  const blocked = all.filter(blockedNow).length;
+  const chips = [
+    // The watch job first: what tried to get out while metered and was stopped.
+    ...(blocked ? [chip("blocked", "Stopped lately", blocked, filter.blocked, () => { filter.blocked = !filter.blocked; render(); })] : []),
+    ...Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => chip(c, prettyCategory(c), n, filter.categories.has(c), () => {
+      filter.categories.has(c) ? filter.categories.delete(c) : filter.categories.add(c);
+      render();
+    })),
+  ];
   const ads = all.filter(isAds).length;
-  const adChip = el("button", { className: "chip", ariaPressed: filter.ads }, "Ads / tracking", el("span", { className: "n", textContent: ads }));
-  adChip.onclick = () => { filter.ads = !filter.ads; render(); };
-  $("chips").replaceChildren(...chips, ...(ads ? [adChip] : []));
+  if (ads) chips.push(chip("ads", "Ads / tracking", ads, filter.ads, () => { filter.ads = !filter.ads; render(); }));
+  $("chips").replaceChildren(...chips);
 }
 
 function render() {
+  // Everything below is rebuilt: remember what had focus, so keyboard and screen-reader users keep their place.
+  const focused = document.activeElement?.id;
+  draw();
+  if (focused && document.activeElement === document.body) document.getElementById(focused)?.focus({ preventScroll: true });
+}
+
+function draw() {
   const all = items();
   renderChips(all);
-  const shown = all.filter(matches);
-
-  // Sections follow the saved state, so a row doesn't jump away when you tick it.
-  const saved = (it) => it.allowed || it.allowedVia;
-  const blocked = shown.filter((it) => it.seen?.blocked && !saved(it)).sort((a, b) => b.seen.blocked - a.seen.blocked);
-  const allowed = shown.filter(saved).sort((a, b) => a.title.localeCompare(b.title));
-  const order = {
-    data: (a, b) => total(b) - total(a),
-    days: (a, b) => (b.seen?.days ?? 0) - (a.seen?.days ?? 0),
-    recent: (a, b) => (b.seen?.last ?? 0) - (a.seen?.last ?? 0),
-  };
-  const sort = view.flows ? filter.sort : filter.sort === "data" ? "days" : filter.sort;
-  const rest = shown.filter((it) => !blocked.includes(it) && !allowed.includes(it))
-    .sort((a, b) => order[sort](a, b) || order.days(a, b) || order.recent(a, b));
+  renderShare(all);
+  const sum = all.reduce((a, it) => a + total(it), 0);
+  const order = (a, b) => total(b) - total(a) || (b.seen?.blocked ?? 0) - (a.seen?.blocked ?? 0) || (b.seen?.days ?? 0) - (a.seen?.days ?? 0) || a.title.localeCompare(b.title);
+  const shown = all.filter(matches).sort(order);
   const known = new Set(all.filter((it) => it.kind === "services").map((it) => it.key));
   const fromCatalog = catalogHits.filter((s) => !known.has(s.id)).map((s) => ({ kind: "services", key: s.id, title: prettyId(s.id), ...s }));
 
-  const lists = [
-    section("Blocked while metered", "Looked up while metered and not allowed. Tick to allow.", blocked.map((it) => row(it, { showBlocked: true }))),
-    section("Allowed", null, allowed.map((it) => row(it))),
-    section(`Seen on board (last ${view.keepDays} days)`,
-      view.flows && total({ seen: { bytes: view.unmatched, since: view.reset.unmatched } }) > 0
-        ? `Plus ${bytes(total({ seen: { bytes: view.unmatched, since: view.reset.unmatched } }))} ${periodText()} to addresses no DNS lookup explains (hard-coded IPs, DNS over HTTPS).`
-        : null,
-      rest.map((it) => row(it))),
-    section("More from the v2fly catalog", "Not seen on board yet.", fromCatalog.map((it) => row(it))),
-  ].filter(Boolean);
-  if (!lists.length) lists.push(el("p", { className: "muted empty", textContent: filter.q ? "Nothing matches." : "Nothing seen yet. Devices show up here once they look names up through the router." }));
-  $("lists").replaceChildren(...lists);
-
-  const n = picked.services.size + picked.domains.size;
-  $("summary").textContent = n
-    ? `${picked.services.size} service${picked.services.size === 1 ? "" : "s"} and ${picked.domains.size} domain${picked.domains.size === 1 ? "" : "s"} allowed while metered, plus the always-allowed lists. Everything else is blocked.`
-    : "Only the always-allowed lists get through while metered. Tick what your crew needs.";
-  dirty();
+  const parts = shown.map((it) => row(it, sum));
+  if (fromCatalog.length) parts.push(el("h2", { textContent: "From the v2fly catalog", style: "margin-top: 20px" }), el("p", { className: "muted listnote", textContent: "Not seen on board yet." }), ...fromCatalog.map((it) => row(it, sum)));
+  if (!parts.length) {
+    parts.push(el("p", { className: "muted empty", textContent: searching
+      ? `Nothing on board matches “${filter.q}”. Searching the v2fly catalog…`
+      : catalogFailed
+      ? `Nothing on board matches “${filter.q}”, and the v2fly catalog couldn't be searched. Try again.`
+      : filter.q
+      ? `Nothing matches “${filter.q}” on board${filter.q.length >= 2 ? " or in the v2fly catalog" : ""}.`
+      : filter.blocked || filter.categories.size
+      ? "Nothing in this filter."
+      : "Nothing seen yet. Devices show up here once they look names up through the router." }));
+  }
+  // A domain nobody has looked up yet, e.g. a GRIB server before leaving port: allow it by typing it.
+  if (FQDN.test(filter.q) && !all.some((it) => it.kind === "domains" && it.key === filter.q)) {
+    const add = el("button", { className: "linkbtn", id: "adddomain", textContent: `Allow ${filter.q} while metered` });
+    add.onclick = () => { picked.domains.add(filter.q); render(); };
+    parts.unshift(el("p", { className: "add" }, add, el("span", { className: "muted", textContent: " Not seen on board yet. Opens this domain and its subdomains." })));
+  }
+  const unmatched = total({ seen: { bytes: view.unmatched, since: view.reset.unmatched } });
+  if (view.flows && unmatched > 0 && !filter.q) parts.push(el("p", { className: "muted listnote", textContent: `Plus ${bytes(unmatched)} ${periodText()} to addresses no DNS lookup explains (hard-coded IPs, DNS over HTTPS).` }));
+  $("lists").replaceChildren(...parts);
+  renderSummary(all);
 }
 
-function changes() {
-  const was = (kind) => new Set((kind === "services" ? view.services : view.domains).filter((x) => x.allowed).map((x) => x.id ?? x.domain));
-  const diff = (a, b) => [...a].filter((x) => !b.has(x)).length + [...b].filter((x) => !a.has(x)).length;
-  return diff(picked.services, was("services")) + diff(picked.domains, was("domains"));
+/** What the router does now (saved state), and what Save would change. */
+function renderSummary(all) {
+  const on = all.filter(opensNow).filter((it) => !it.allowedVia).map((it) => it.title);
+  const names = on.length > 4 ? [...on.slice(0, 3), `${on.length - 3} more`] : on;
+  const fixed = el("button", { className: "inlinelink", textContent: "the always-allowed lists" });
+  fixed.onclick = () => { $("fixedbox").open = true; $("fixedbox").scrollIntoView({ block: "center" }); };
+  const series = names.length ? `${names.join(", ")} and ` : "only ";
+  const metered = view.profile === "metered";
+  $("summary").replaceChildren(
+    el("strong", { className: metered ? "badge" : "badge normal", textContent: metered ? "Metered now" : "Normal now" }),
+    metered ? `${series[0].toUpperCase()}${series.slice(1)}` : `Everything gets through. While metered, ${series}`, fixed,
+    metered ? " get through." : " will.",
+    view.savedAt ? el("span", { className: "muted", textContent: ` Router updated ${dated(view.savedAt)}.` }) : "");
+  renderPending(all);
 }
 
-function dirty() {
-  const n = changes();
-  $("save").disabled = n === 0;
-  if ($("save").dataset.busy) return;
-  if (n) $("status").textContent = `${n} unsaved change${n > 1 ? "s" : ""}`;
-  else if (/unsaved/.test($("status").textContent)) $("status").textContent = "";
+function renderPending(all) {
+  const opening = all.filter((it) => opensAfter(it) && !opensNow(it));
+  const closing = all.filter((it) => !opensAfter(it) && opensNow(it));
+  const n = opening.length + closing.length;
+  const busy = !!$("save").dataset.busy;
+  $("save").disabled = n === 0 || busy;
+  $("discard").hidden = n === 0 || busy;
+  $("pending").hidden = n === 0;
+  if (!n) return;
+  const parts = [];
+  if (opening.length) parts.push(`allow ${list(opening.map((it) => it.title))}`);
+  if (closing.length) parts.push(`block ${list(closing.map((it) => it.title))}`);
+  let text = parts.join(", ");
+  text = `${text[0].toUpperCase()}${text.slice(1)}.`;
+  // A forecast on the 14 days, whatever period is shown: a blocked service has used next to nothing while
+  // metered, precisely because it was blocked, so only its whole recent use says what allowing it may cost.
+  const recent = opening.reduce((a, it) => a + (it.seen?.bytes?.[0] ?? 0) + (it.seen?.bytes?.[1] ?? 0), 0);
+  if (view.flows && recent > 0) {
+    text += ` ${opening.length === 1 ? "It" : "They"} used ${bytes(recent)} in the last ${view.keepDays} days`;
+    text += view.pricePerGb > 0 ? `, about ${((recent / 1e9) * view.pricePerGb).toFixed(2)} ${view.currency} if metered.` : ".";
+  }
+  const secs = saveSeconds(all);
+  if (secs >= 5) text += ` Saving takes about ${secs}\u00a0s.`;
+  $("pending").textContent = text;
+  if (!busy && $("status").textContent.startsWith("Saved")) { $("status").textContent = ""; $("status").className = "muted"; } // a new edit makes the last result stale
 }
+
+const unsaved = () => !$("pending").hidden;
+const saveSeconds = (all) => Math.round(all.filter((it) => isPicked(it) !== !!it.allowed).reduce((a, it) => a + (it.kind === "services" ? it.size : 1), 0) * SECONDS_PER_ENTRY);
 
 function show(v) {
   view = v;
@@ -260,73 +427,82 @@ function show(v) {
     services: new Set(v.services.filter((s) => s.allowed).map((s) => s.id)),
     domains: new Set(v.domains.filter((d) => d.allowed).map((d) => d.domain)),
   };
-  $("profile").textContent = v.profile;
-  $("sortrow").hidden = false;
-  $("sort").querySelector('[value="data"]').hidden = !v.flows;
-  showPeriod();
-  $("fixed").replaceChildren(...v.fixed.map((f) => el("div", { className: "item" }, el("div", { className: "title", textContent: f.name }), el("div", { className: "details", style: "margin-left: 0", textContent: f.hosts.join(", ") }))));
+  filter.period = view.reset.at ? filter.period ?? "since" : "days"; // since the reset once there is one: it's what a reset is for
+  $("reset").hidden = !v.flows;
+  $("fixed").replaceChildren(...v.fixed.map((f) => el("div", { className: "item" }, el("div", { className: "title", textContent: f.name }), el("div", { className: "details", textContent: f.hosts.join(", ") }))));
   $("credit").textContent = `Services and categories: v2fly/domain-list-community (${(v.v2fly ?? "").slice(0, 7)}), MIT licence.`;
   render();
 }
 
-$("sort").onchange = () => { filter.sort = $("sort").value; render(); };
-
-/** The data period picker: last N days, or since the reset once there was one (preferred, it's what a reset is for). */
-function showPeriod() {
-  filter.period = view.reset.at ? filter.period ?? "since" : "days";
-  $("periodbox").hidden = !view.flows;
-  const [days, sinceOpt] = $("period").options;
-  days.textContent = `Last ${view.keepDays} days`;
-  sinceOpt.textContent = view.reset.at ? `Since ${at(view.reset.at)}` : "Since reset";
-  sinceOpt.hidden = !view.reset.at;
-  $("period").value = filter.period;
-}
-$("period").onchange = () => { filter.period = $("period").value; render(); };
-
 $("reset").onclick = async () => {
   try {
-    view = await api("/reset", { method: "POST" }); // keeps unsaved ticks: `picked` is left alone
+    view = await api("/reset", { method: "POST" }); // keeps unsaved switches: `picked` is left alone
     filter.period = "since";
-    showPeriod();
     render();
-    $("status").textContent = `Counting data from ${at(view.reset.at)}.`;
+    $("resetnote").textContent = `Counting from ${dated(view.reset.at)}. The ${view.keepDays}-day history stays.`;
+    setTimeout(() => ($("resetnote").textContent = ""), 8000);
   } catch (err) {
-    $("message").textContent = err.message;
+    $("resetnote").textContent = `Couldn't reset: ${err.message}`;
   }
 };
 
 let searchTimer;
 $("search").oninput = () => {
   filter.q = $("search").value.trim().toLowerCase();
+  searching = filter.q.length >= 2;
   render();
   clearTimeout(searchTimer);
   searchTimer = setTimeout(async () => {
-    catalogHits = filter.q.length >= 2 ? (await api(`/catalog?q=${encodeURIComponent(filter.q)}`).catch(() => ({ services: [] }))).services : [];
+    catalogFailed = false;
+    catalogHits = filter.q.length >= 2 ? (await api(`/catalog?q=${encodeURIComponent(filter.q)}`).catch(() => ((catalogFailed = true), { services: [] }))).services : [];
+    searching = false;
     render();
   }, 250);
 };
 
+$("discard").onclick = () => show(view);
+
 $("save").onclick = async () => {
-  // Services picked from the catalog search need to stay listed after saving.
   const body = { services: [...picked.services], domains: [...picked.domains] };
-  $("save").disabled = true;
+  const all = items();
+  const opening = all.filter((it) => opensAfter(it) && !opensNow(it)).map((it) => it.title);
+  const closing = all.filter((it) => !opensAfter(it) && opensNow(it)).map((it) => it.title);
+  const changed = all.filter((it) => opensAfter(it) !== opensNow(it)).map((it) => `${it.kind}:${it.key}`);
+  const secs = saveSeconds(all);
   $("save").dataset.busy = "1";
-  $("status").textContent = "Saving to the router… big services can take a minute.";
+  $("status").className = "muted";
+  $("status").textContent = `Saving to the router…${secs >= 5 ? ` about ${secs}\u00a0s` : ""}`;
+  // Switches flipped now would be overwritten by the saved state: hold the page still until the router answers.
+  for (const id of ["lists", "share"]) { $(id).inert = true; $(id).setAttribute("aria-busy", "true"); }
+  $("reset").disabled = true;
+  render();
+  const done = () => {
+    delete $("save").dataset.busy;
+    for (const id of ["lists", "share"]) { $(id).inert = false; $(id).removeAttribute("aria-busy"); }
+    $("reset").disabled = false;
+  };
   try {
     const result = await api("/allowlist", { method: "POST", body: JSON.stringify(body) });
+    done();
+    flashed = new Set(changed);
     show(result);
+    setTimeout(() => { flashed = new Set(); render(); }, 2500);
+    const outcome = [
+      opening.length && `${list(opening)} ${opening.length === 1 ? "now gets" : "now get"} through while metered`,
+      closing.length && `${list(closing)} ${closing.length === 1 ? "is" : "are"} blocked while metered`,
+    ].filter(Boolean).join("; ");
     const { added, removed, ms } = result.sync ?? {};
-    $("status").textContent = result.sync
-      ? `Saved: ${added} router entr${added === 1 ? "y" : "ies"} added, ${removed} removed, in ${(ms / 1000).toFixed(1)} s.`
-      : "Saved. The router is updated.";
+    $("status").className = "confirm";
+    $("status").textContent = `Saved. ${outcome || "The router is updated"}.` + (result.sync ? ` (${plural(added + removed, "router entry", "router entries")} updated in ${(ms / 1000).toFixed(1)} s)` : "");
   } catch (err) {
-    $("message").textContent = err.message;
-    $("status").textContent = "";
-  } finally {
-    delete $("save").dataset.busy;
-    dirty();
+    done();
+    $("status").className = "error";
+    $("status").textContent = `Couldn't save: ${err.message}. Your switches are kept, try Save again.`;
+    render();
   }
 };
+
+addEventListener("beforeunload", (e) => { if (view && unsaved()) e.preventDefault(); });
 
 api("/allowlist").then(show).catch((err) => ($("message").textContent = err.message));
 </script>

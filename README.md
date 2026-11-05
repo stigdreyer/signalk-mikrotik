@@ -144,7 +144,7 @@ shows:
 - **Data volume** per service and domain over the last 14 days, with the
   metered part, sorted by volume (optional, needs the router's Traffic Flow
   export, see [router-setup.md](docs/router-setup.md#5-optional-traffic-flow-for-data-volume-per-service)).
-  **Reset counter** starts a second count from now, e.g. right after
+  **Start counting from now** starts a second count, e.g. right after
   switching to metered, to see what still uses data. The 14-day history stays.
   The router reports every connection, and the plugin books its bytes to the
   name the device looked up, following CNAMEs, so CDN traffic counts for the
@@ -173,8 +173,8 @@ toggle a setting), then pick from the list.
 Both webapp pages have a night mode: red on black, so nobody on watch loses
 their night vision. By default it follows the vessel's day/night mode
 (`environment.mode`, e.g. from signalk-derived-data), like other Signal K
-apps. The **Mode** button in the page header forces night or day on that
-device instead.
+apps. **Night** or **Day** in the page header forces one on that device;
+**Auto** goes back to following the vessel.
 
 ## What it does on the router
 

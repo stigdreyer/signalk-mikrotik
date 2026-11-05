@@ -6,52 +6,100 @@
 <title>MikroTik Data Usage</title>
 <link rel="stylesheet" href="style.css">
 <script src="mode.js"></script>
+<style>
+  .cycle { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
+  .cycle h1 { font-size: 1.25rem; margin: 0; text-align: center; font-variant-numeric: tabular-nums; }
+  .cycle p { margin: 2px auto 0; font-size: 0.8125rem; text-align: center; }
+  .step { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }
+  .step svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .step:disabled { visibility: hidden; }
+  .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 8px; }
+  .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin: 12px 0 4px; font-size: 0.8125rem; }
+
+  /* One chart for the cycle. Pointing at (or tapping) a day shows its numbers just above its bar. */
+  .chart { position: relative; touch-action: pan-y; border-radius: 4px; }
+  .legend { display: flex; gap: 14px; font-size: 0.8125rem; color: var(--text-2); margin: 16px 0 8px; }
+  .chart svg text.today { fill: var(--text); font-weight: 700; }
+  .tip { position: absolute; z-index: 1; pointer-events: none; white-space: nowrap; font-size: 0.8125rem; font-variant-numeric: tabular-nums;
+    padding: 6px 10px; border-radius: 6px; background: var(--fill); color: var(--on-fill); border: 1px solid var(--text);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); }
+  .tip b { font-weight: 700; }
+  .router p { margin: 4px 0; }
+  .foot { font-size: 0.8125rem; margin-top: 20px; }
+  @media (max-width: 600px) { .cycle h1 { font-size: 1.125rem; } }
+</style>
 </head>
 <body>
+<header class="appbar"></header>
 <main>
-  <nav><a href="index.html" aria-current="page">Usage</a><a href="allowlist.html">Allowlist</a></nav>
-  <h1>Data usage</h1>
-  <div class="muted">Router profile: <strong id="profile">…</strong></div>
-  <div id="message" class="error"></div>
+  <div id="message" class="error" role="alert"></div>
 
-  <div class="row tabs" id="months" role="tablist"></div>
-  <div class="row tabs" id="zone" role="group" aria-label="Days in"></div>
-  <div class="tiles" id="tiles"></div>
-
-  <div class="chart" id="chart">
-    <div class="row muted">
-      <span><span class="swatch" style="background: var(--normal)"></span>Normal</span>
-      <span><span class="swatch" style="background: var(--metered)"></span>Metered</span>
-    </div>
-    <svg id="bars" role="img" aria-label="Daily data usage, normal and metered"></svg>
-    <div class="tip" id="tip"></div>
+  <div class="cycle">
+    <button class="step" id="prev" aria-label="Previous cycle"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5L7 10l5.5 5.5"/></svg></button>
+    <div><h1 id="title">…</h1><p class="muted" id="subtitle"></p></div>
+    <button class="step" id="next" aria-label="Next cycle"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4.5L13 10l-5.5 5.5"/></svg></button>
   </div>
 
-  <details>
-    <summary class="muted">Table</summary>
-    <table id="table"></table>
-  </details>
+  <div class="totals" id="totals"></div>
+  <div class="meta">
+    <span class="muted">Router profile: <strong id="profile">…</strong></span>
+    <span class="setting">Days in <span class="seg" id="zone" role="group" aria-label="Days in"></span></span>
+  </div>
+  <p id="hint" class="muted" hidden></p>
 
-  <section>
-    <h2>Router check</h2>
-    <div id="preflight" class="muted">…</div>
-  </section>
+  <div class="legend">
+    <span><span class="swatch" style="background: var(--metered)"></span>Metered</span>
+    <span><span class="swatch" style="background: var(--normal-bar)"></span>Normal</span>
+  </div>
+  <div class="chart" id="chart" tabindex="0" role="slider" aria-valuemin="1" aria-label="Data per day; arrow keys move between days">
+    <svg id="bars" aria-hidden="true"></svg>
+    <div class="tip" id="tip" hidden></div>
+  </div>
 
-  <p class="muted"><span id="zonenote"></span> Bytes are counted at the router's WAN interface, so they include
-    protocol overhead and the router's own traffic, but not the dish's own traffic. GB = 10<sup>9</sup> bytes.</p>
+  <p><a href="allowlist.html" class="textlink">What used it? See data per service on the Allowlist page</a></p>
+  <section class="router" id="router" hidden></section>
+
+  <p class="muted foot"><span id="zonenote"></span> Bytes are counted at the router's WAN interface, so they include
+    protocol overhead and the router's own traffic, but not the dish's own traffic. GB = 10<sup>9</sup> bytes.
+    <span id="routerok"></span></p>
 </main>
 <script>
 const API = "/plugins/signalk-mikrotik";
 const GB = 1e9;
+const DAY = 86_400_000;
 const $ = (id) => document.getElementById(id);
 const gb = (bytes) => (bytes / GB).toFixed(bytes < 10 * GB ? 2 : 1);
 const sum = (b) => b.rx + b.tx;
 let data;
-let month;
+let cycle = null;  // first day of the shown cycle, null for the current one
+let picked = null; // index of the day whose numbers show
+let days = [];     // the shown cycle's days, oldest first
 // Days in the viewer's time zone by default; UTC days line up with Starlink's Data Usage page.
 let zone = "local";
 try { zone = localStorage.getItem("signalk-mikrotik-zone") || "local"; } catch {}
 const localDay = (ms) => new Date(ms).toLocaleDateString("sv-SE"); // sv-SE formats as YYYY-MM-DD
+
+// Day keys are calendar dates; do the arithmetic on them as UTC midnights.
+const dateOf = (key) => new Date(`${key}T00:00:00Z`);
+const keyOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+const daysIn = (y, m) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+const today = () => (zone === "utc" ? keyOf(Date.now()) : localDay(Date.now()));
+const fmt = (key, opts) => dateOf(key).toLocaleDateString(undefined, { timeZone: "UTC", ...opts });
+
+/** First day of the billing cycle that holds `key`: the billing day, or the month's last day when it is shorter. */
+function cycleStart(key) {
+  const d = dateOf(key);
+  let y = d.getUTCFullYear(), m = d.getUTCMonth();
+  const b = data.billingDay || 1;
+  if (d.getUTCDate() < Math.min(b, daysIn(y, m))) { m -= 1; if (m < 0) { m = 11; y -= 1; } }
+  return keyOf(Date.UTC(y, m, Math.min(b, daysIn(y, m))));
+}
+const nextStart = (start) => {
+  const d = dateOf(start);
+  const y = d.getUTCFullYear(), m = d.getUTCMonth() + 1;
+  return cycleStart(keyOf(Date.UTC(y, m, Math.min(data.billingDay || 1, daysIn(y, m % 12)))));
+};
+const prevStart = (start) => cycleStart(keyOf(dateOf(start) - DAY));
 
 /** Daily totals { "YYYY-MM-DD": {normal, metered} } in the chosen zone. */
 function dayTotals() {
@@ -68,19 +116,25 @@ function dayTotals() {
   return out;
 }
 
+const el = (tag, props = {}, ...children) => {
+  const e = Object.assign(document.createElement(tag), props);
+  e.append(...children.filter((c) => typeof c === "string" || c instanceof Node));
+  return e;
+};
+
 function renderZone() {
   const offset = -new Date().getTimezoneOffset() / 60;
   const name = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const options = [["local", `Local (${name}, UTC${offset >= 0 ? "+" : ""}${offset})`], ["utc", "UTC, like Starlink"]];
+  const options = [["local", `Local, UTC${offset >= 0 ? "+" : ""}${offset}`], ["utc", "UTC, like Starlink"]];
   $("zone").replaceChildren(...options.map(([z, label]) => {
-    const b = Object.assign(document.createElement("button"), { textContent: label });
+    const b = el("button", { textContent: label });
     b.setAttribute("aria-pressed", z === zone);
-    b.setAttribute("aria-selected", z === zone);
     b.onclick = () => {
       zone = z;
       try { localStorage.setItem("signalk-mikrotik-zone", z); } catch {}
-      month = null;
-      render();
+      cycle = null;
+      picked = null;
+      load();
     };
     return b;
   }));
@@ -89,6 +143,151 @@ function renderZone() {
     : `Days are in this device's time zone (${name}). Switch to UTC to compare with Starlink's Data Usage page.`;
 }
 
+const tile = (label, value, lead) =>
+  el("div", { className: lead ? "tile lead" : "tile" }, el("div", { className: "muted", textContent: label }), el("div", { className: "value", textContent: value }));
+
+/** Rect with rounded top corners only: the data end rounds, the baseline stays square. */
+function topRounded(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+function niceMax(v) {
+  if (v <= 0) return GB;
+  const p = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v);
+}
+
+let geometry; // { W, L, T, step, y } of the last drawn chart, for pointer hit-testing and the tip
+function renderChart() {
+  // Draw at the real pixel width, so labels keep their size on a phone.
+  const W = Math.max(300, $("bars").clientWidth || 880), H = 240, L = 44, B = 22, T = 10;
+  const max = niceMax(Math.max(...days.map((d) => d.normal + d.metered)));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  const step = (W - L) / days.length;
+  const bw = Math.max(2, step - (step > 12 ? 4 : 2));
+  geometry = { W, L, T, step, y };
+  const now = today();
+  const parts = [];
+  for (let i = 0; i <= 4; i++) {
+    const v = (max * i) / 4;
+    parts.push(`<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>`);
+    parts.push(`<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${+(v / GB).toFixed(2)}${i === 4 ? " GB" : ""}</text>`);
+  }
+  if (picked !== null) parts.push(`<rect x="${L + picked * step}" y="${T}" width="${step}" height="${H - T - B}" fill="var(--panel)"/>`);
+  const every = W < 500 ? 7 : 3;
+  days.forEach((d, i) => {
+    const x = L + i * step + (step - bw) / 2;
+    const base = y(0);
+    const nh = base - y(d.normal);
+    const mh = base - y(d.metered);
+    // Metered sits on top of normal with a 2px surface gap; whichever is on top gets the rounded end.
+    if (d.normal > 0) parts.push(`<path d="${topRounded(x, base - nh, bw, nh, d.metered > 0 ? 0 : 3)}" fill="var(--normal-bar)"/>`);
+    if (d.metered > 0) parts.push(`<path d="${topRounded(x, base - nh - (d.normal > 0 ? 2 : 0) - mh, bw, mh, 3)}" fill="var(--metered)"/>`);
+    // Label the first day, every few days, and today; day 1 of a month carries the month.
+    const date = dateOf(d.key).getUTCDate();
+    const todayAt = days.findIndex((x) => x.key === now);
+    const clear = (todayAt < 0 || Math.abs(todayAt - i) * step > 44) && i * step > 44; // keep clear of the Today and first labels
+    if (i === 0 || d.key === now || ((i % every === 0 || date === 1) && clear)) {
+      const label = i === 0 || date === 1 ? fmt(d.key, { day: "numeric", month: "short" }) : date;
+      parts.push(`<text x="${x + bw / 2}" y="${H - 5}" text-anchor="${i === 0 ? "start" : "middle"}"${d.key === now ? ' class="today"' : ""}>${d.key === now ? "Today" : label}</text>`);
+    }
+  });
+  const svg = $("bars");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = parts.join("");
+  showTip();
+}
+
+const dayText = (d) => `${d.key === today() ? "Today" : fmt(d.key, { weekday: "short", day: "numeric", month: "short" })}` +
+  (d.future ? " · not yet" : !d.known ? " · no data" : ` · ${gb(d.metered)} GB metered · ${gb(d.normal)} GB normal`);
+
+/** The picked day's numbers, set just above its bar and kept inside the chart. */
+function showTip() {
+  const tip = $("tip");
+  // The slider always has a value for assistive tech: the picked day, or today (the last day) when none is picked.
+  const at = picked ?? Math.max(0, days.findIndex((d) => d.key === today()));
+  $("chart").setAttribute("aria-valuenow", at + 1);
+  $("chart").setAttribute("aria-valuetext", days[at] ? dayText(days[at]) : "");
+  if (picked === null) { tip.hidden = true; return; }
+  const d = days[picked];
+  const [date, ...rest] = dayText(d).split(" · ");
+  tip.replaceChildren(el("b", { textContent: date }), ` · ${rest.join(" · ")}`);
+  tip.hidden = false;
+  const svg = $("bars").getBoundingClientRect(), chart = $("chart").getBoundingClientRect();
+  const scale = svg.width / geometry.W;
+  const centre = (geometry.L + (picked + 0.5) * geometry.step) * scale + (svg.left - chart.left);
+  const top = Math.min(geometry.y(d.normal + d.metered), geometry.y(0)) * scale + (svg.top - chart.top);
+  tip.style.left = `${Math.max(0, Math.min(centre - tip.offsetWidth / 2, chart.width - tip.offsetWidth))}px`;
+  tip.style.top = `${Math.max(0, top - tip.offsetHeight - 8)}px`;
+}
+
+function pick(i) {
+  i = Math.max(0, Math.min(days.length - 1, i));
+  if (i === picked) return showTip();
+  picked = i;
+  renderChart();
+}
+
+function render() {
+  renderZone();
+  const totals = dayTotals();
+  const now = today();
+  const current = cycleStart(now);
+  const start = cycle ?? current;
+  const end = keyOf(dateOf(nextStart(start)) - DAY);
+  const earliest = data.first ?? Object.keys(totals).sort()[0] ?? now;
+  const isCurrent = start === current;
+
+  days = [];
+  for (let ms = dateOf(start).getTime(); ms <= dateOf(end).getTime(); ms += DAY) {
+    const key = keyOf(ms);
+    const t = totals[key];
+    days.push({ key, normal: t ? sum(t.normal) : 0, metered: t ? sum(t.metered) : 0, known: !!t || key >= earliest, future: key > now });
+  }
+
+  const year = (key) => dateOf(key).getUTCFullYear() !== dateOf(now).getUTCFullYear();
+  $("title").textContent = `${fmt(start, { day: "numeric", month: "short", year: year(start) ? "numeric" : undefined })} – ${fmt(end, { day: "numeric", month: "short", year: year(end) ? "numeric" : undefined })}`;
+  const kind = (data.billingDay || 1) === 1 ? "Calendar month" : "Billing cycle";
+  $("subtitle").textContent = isCurrent
+    ? `${kind} · day ${days.findIndex((d) => d.key === now) + 1} of ${days.length}`
+    : `${kind} · ${days.length} days`;
+  $("prev").disabled = start <= earliest;
+  $("next").disabled = isCurrent;
+  $("hint").hidden = (data.billingDay || 1) !== 1;
+  $("hint").textContent = "Cycles follow calendar months. Set your billing day in the plugin settings to line up with Starlink's billing cycle.";
+  $("chart").setAttribute("aria-valuemax", days.length);
+
+  const metered = days.reduce((a, d) => a + d.metered, 0);
+  const normal = days.reduce((a, d) => a + d.normal, 0);
+  $("totals").replaceChildren(tile(isCurrent ? "Metered so far" : "Metered", `${gb(metered)} GB`, true), tile(isCurrent ? "Normal so far" : "Normal", `${gb(normal)} GB`));
+  renderChart();
+}
+
+// Point at a bar (mouse), or tap or slide a finger along the chart, to see a day; arrow keys step through days.
+const dayAt = (e) => {
+  const box = $("bars").getBoundingClientRect();
+  return Math.floor((((e.clientX - box.left) * geometry.W) / box.width - geometry.L) / geometry.step);
+};
+$("chart").onpointermove = (e) => { if (e.pointerType === "mouse" || e.buttons) { const i = dayAt(e); if (i >= 0 && i < days.length) pick(i); } };
+$("chart").onpointerdown = (e) => { const i = dayAt(e); if (i >= 0 && i < days.length) pick(i); };
+$("chart").onpointerleave = (e) => { if (e.pointerType === "mouse") { picked = null; renderChart(); } };
+$("chart").onkeydown = (e) => {
+  const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+  if (!step && e.key !== "Home" && e.key !== "End") return;
+  e.preventDefault();
+  const start = picked ?? Math.max(0, days.findIndex((d) => d.key === today()));
+  pick(e.key === "Home" ? 0 : e.key === "End" ? days.length - 1 : picked === null ? start : start + step);
+};
+$("chart").onblur = () => { picked = null; renderChart(); };
+
+$("prev").onclick = () => { cycle = prevStart(cycle ?? cycleStart(today())); picked = null; load(); };
+$("next").onclick = () => {
+  const n = nextStart(cycle ?? cycleStart(today()));
+  cycle = n === cycleStart(today()) ? null : n;
+  picked = null;
+  load();
+};
+
 async function get(path) {
   const res = await fetch(API + path, { credentials: "same-origin" });
   if (res.status === 401 || res.status === 403) throw new Error("Log in to the Signal K admin UI to see this page.");
@@ -96,126 +295,15 @@ async function get(path) {
   return res.json();
 }
 
-function daysOfMonth(m, totals) {
-  const [y, mo] = m.split("-").map(Number);
-  const n = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-  return Array.from({ length: n }, (_, i) => {
-    const key = `${m}-${String(i + 1).padStart(2, "0")}`;
-    const day = totals[key];
-    return { key, d: i + 1, normal: day ? sum(day.normal) : 0, metered: day ? sum(day.metered) : 0 };
-  });
-}
-
-function renderTabs() {
-  const now = (zone === "utc" ? new Date().toISOString() : localDay(Date.now())).slice(0, 7);
-  const months = [...new Set([...Object.keys(dayTotals()).map((d) => d.slice(0, 7)), now])].sort();
-  month ??= now;
-  $("months").replaceChildren(...months.map((m) => {
-    const b = document.createElement("button");
-    b.role = "tab";
-    b.textContent = new Date(m + "-01T00:00:00Z").toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
-    b.setAttribute("aria-selected", m === month);
-    b.onclick = () => { month = m; render(); };
-    return b;
-  }));
-}
-
-function renderTiles(days) {
-  const normal = days.reduce((a, d) => a + d.normal, 0);
-  const metered = days.reduce((a, d) => a + d.metered, 0);
-  const tiles = [["Normal", `${gb(normal)} GB`], ["Metered", `${gb(metered)} GB`]];
-  if (data.pricePerGb > 0) {
-    const cost = (metered / GB) * data.pricePerGb;
-    tiles.push(["Metered cost (estimate)", `${cost.toFixed(2)} ${data.currency}`]);
-  }
-  $("tiles").replaceChildren(...tiles.map(([label, value]) => {
-    const t = document.createElement("div");
-    t.className = "tile";
-    t.innerHTML = `<div class="muted"></div><div class="value"></div>`;
-    t.children[0].textContent = label;
-    t.children[1].textContent = value;
-    return t;
-  }));
-}
-
-/** Rect with rounded top corners only: the data end rounds, the baseline stays square. */
-function topRounded(x, y, w, h, r) {
-  r = Math.min(r, h, w / 2);
-  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
-}
-
-function niceMax(v) {
-  if (v <= 0) return GB;
-  const p = 10 ** Math.floor(Math.log10(v));
-  return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v);
-}
-
-function renderChart(days) {
-  // Draw at the real pixel width, so labels keep their size on a phone.
-  const W = Math.max(300, $("bars").clientWidth || 880), H = 240, L = 44, B = 20, T = 8;
-  const max = niceMax(Math.max(...days.map((d) => d.normal + d.metered)));
-  const y = (v) => T + (H - T - B) * (1 - v / max);
-  const step = (W - L) / days.length;
-  const bw = Math.max(2, step - 4);
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = $("bars");
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const parts = [];
-  for (let i = 0; i <= 4; i++) {
-    const v = (max * i) / 4;
-    parts.push(`<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>`);
-    parts.push(`<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${+(v / GB).toFixed(2)}${i === 4 ? " GB" : ""}</text>`);
-  }
-  days.forEach((d, i) => {
-    const x = L + i * step + (step - bw) / 2;
-    const base = y(0);
-    const nh = base - y(d.normal);
-    const mh = base - y(d.metered);
-    // Metered sits on top of normal with a 2px surface gap; whichever is on top gets the rounded end.
-    if (d.normal > 0) parts.push(`<path d="${topRounded(x, base - nh, bw, nh, d.metered > 0 ? 0 : 4)}" fill="var(--normal)"/>`);
-    if (d.metered > 0) {
-      const top = base - nh - (d.normal > 0 ? 2 : 0) - mh;
-      parts.push(`<path d="${topRounded(x, top, bw, mh, 4)}" fill="var(--metered)"/>`);
-    }
-    if (d.d === 1 || d.d % (W < 500 ? 10 : 5) === 0) parts.push(`<text x="${x + bw / 2}" y="${H - 4}" text-anchor="middle">${d.d}</text>`);
-    parts.push(`<rect class="hit" data-i="${i}" x="${L + i * step}" y="${T}" width="${step}" height="${H - T - B}" fill="transparent"/>`);
-  });
-  svg.innerHTML = parts.join("");
-  svg.querySelectorAll(".hit").forEach((r) => {
-    const show = () => {
-      const d = days[r.dataset.i];
-      const tip = $("tip");
-      tip.textContent = `${d.key} · Normal ${gb(d.normal)} GB · Metered ${gb(d.metered)} GB`;
-      tip.style.display = "block";
-      const box = r.getBoundingClientRect(), chart = $("chart").getBoundingClientRect();
-      const left = box.left - chart.left + box.width / 2 - tip.offsetWidth / 2;
-      tip.style.left = `${Math.max(0, Math.min(left, chart.width - tip.offsetWidth))}px`;
-      tip.style.top = `${box.top - chart.top - tip.offsetHeight - 4}px`;
-    };
-    r.addEventListener("pointerenter", show);
-    r.addEventListener("pointerleave", () => ($("tip").style.display = "none"));
-  });
-}
-
-function renderTable(days) {
-  const rows = days.filter((d) => d.normal || d.metered);
-  $("table").innerHTML = `<tr><th>Day (${zone === "utc" ? "UTC" : "local"})</th>`+"<th>Normal GB</th><th>Metered GB</th></tr>" +
-    rows.map((d) => `<tr><td>${d.key}</td><td>${gb(d.normal)}</td><td>${gb(d.metered)}</td></tr>`).join("");
-}
-
-function render() {
-  renderZone();
-  renderTabs();
-  const days = daysOfMonth(month, dayTotals());
-  renderTiles(days);
-  renderChart(days);
-  renderTable(days);
-}
-
+/** Fetch only the shown cycle (a day either side, for local-time days that straddle UTC dates). */
 async function load() {
+  const span = data
+    ? [keyOf(dateOf(cycle ?? cycleStart(today())) - DAY), keyOf(dateOf(nextStart(cycle ?? cycleStart(today()))) + DAY)]
+    : [keyOf(Date.now() - 33 * DAY), keyOf(Date.now() + DAY)]; // first load: no billing day yet, but a cycle is at most 31 days
   try {
-    data = await get("/usage");
+    data = await get(`/usage?from=${span[0]}&to=${span[1]}`);
     $("profile").textContent = data.profile;
+    $("profile").className = data.profile === "metered" ? "badge" : "badge normal";
     $("message").textContent = "";
     render();
   } catch (err) {
@@ -223,21 +311,30 @@ async function load() {
   }
 }
 
+/** The router check only takes room when something needs fixing; otherwise one line in the footnote. */
 async function loadPreflight() {
+  const line = (text, className) => el("p", { textContent: text, className });
   try {
     const c = await get("/preflight");
-    const lines = [`RouterOS ${c.version}`, ...c.errors.map((e) => `Error: ${e}`), ...c.warnings];
-    if (!c.errors.length && !c.warnings.length) lines.push("No problems found.");
-    $("preflight").replaceChildren(...lines.map((l) => Object.assign(document.createElement("div"), { textContent: l })));
+    const n = c.errors.length + c.warnings.length;
+    $("router").hidden = !n;
+    $("routerok").textContent = n ? "" : `Router check: RouterOS ${c.version}, no problems found.`;
+    if (n) {
+      $("router").replaceChildren(
+        el("h2", { textContent: `Router needs ${n === 1 ? "a fix" : `${n} fixes`}` }),
+        ...c.errors.map((e) => line(`Error: ${e}`, "error")),
+        ...c.warnings.map((w) => line(`Warning: ${w}`, "warn")));
+    }
   } catch (err) {
-    $("preflight").textContent = err.message;
+    $("router").hidden = false;
+    $("router").replaceChildren(line(`Couldn't check the router: ${err.message}`, "error"));
   }
 }
 
 load();
 loadPreflight();
 setInterval(load, 60_000);
-addEventListener("resize", () => data && render());
+addEventListener("resize", () => data && renderChart());
 </script>
 </body>
 </html>
