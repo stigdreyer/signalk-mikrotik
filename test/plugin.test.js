@@ -224,3 +224,55 @@ test("while metered, lookups the allowlist doesn't cover are marked blocked", as
   assert.equal(fake.flushed, 1);
   plugin.stop();
 });
+
+test("Traffic Flow bytes are booked to the name a device looked up, CDN addresses included", async (t) => {
+  const dgram = require("node:dgram");
+  const { packet } = require("./flow-packets");
+  const app = fakeApp();
+  const cache = [
+    { name: "mmg.whatsapp.net", type: "A", data: "157.240.1.1" },
+    { name: "www.example.org", type: "CNAME", data: "edge.cdn-example.net" },
+    { name: "edge.cdn-example.net", type: "A", data: "93.184.216.34" },
+  ];
+  const fake = await fakeRouter(defconf({ tables: { "ip/dns/cache/all": cache } }));
+  t.after(() => fake.close());
+  const plugin = createPlugin(app);
+  const flowPort = 39_000 + Math.floor(Math.random() * 1000);
+  await plugin.start({ url: fake.url, username: "u", password: "p", flowPort });
+
+  const sock = dgram.createSocket("udp4");
+  const send = (buf) => new Promise((r) => sock.send(buf, flowPort, "127.0.0.1", r));
+  await send(packet(10, [
+    { src: "192.168.88.10", dst: "157.240.1.1", bytes: 1000 },
+    { src: "157.240.1.1", dst: "192.168.88.10", bytes: 2000 },
+    { src: "93.184.216.34", dst: "192.168.88.10", bytes: 5000 },
+    { src: "192.168.88.10", dst: "192.168.88.20", bytes: 9999 }, // on board: not counted
+    { src: "8.8.4.4", dst: "192.168.88.10", bytes: 300 }, // no DNS answer yet: waits
+  ]));
+  sock.close();
+
+  let body;
+  for (let i = 0; i < 50; i++) {
+    ({ body } = await call(plugin, "get", "/allowlist"));
+    if (body.services.find((s) => s.id === "whatsapp")?.seen.bytes[0]) break;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.equal(body.flows, true);
+  assert.deepEqual(body.services.find((s) => s.id === "whatsapp").seen.bytes, [3000, 0]);
+  assert.deepEqual(body.domains.find((d) => d.domain === "example.org").seen.bytes, [5000, 0]);
+  assert.deepEqual(body.unmatched, [0, 0], "the unknown address is still waiting for its DNS answer");
+  plugin.stop();
+});
+
+test("allowing a service skips names its own domains already cover, and reports the sync", async (t) => {
+  const app = fakeApp();
+  const { fake, plugin } = await start(t, app);
+  const before = fake.tables["ip/dns/static"].length;
+  const { body } = await call(plugin, "post", "/allowlist", { body: { services: ["google"], domains: [] } });
+  const names = new Set(fake.tables["ip/dns/static"].map((r) => r.name));
+  assert.ok(names.has("google.com"));
+  assert.ok(![...names].some((n) => n.endsWith(".google.com")), "subdomains of google.com need no entry of their own");
+  assert.ok(!names.has("time.google.com"), "the base list's own entry is covered by google.com now");
+  assert.equal(body.sync.added - body.sync.removed, names.size - before);
+  plugin.stop();
+});

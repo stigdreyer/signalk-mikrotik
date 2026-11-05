@@ -5,6 +5,7 @@ const router = require("./lib/router");
 const usage = require("./lib/usage");
 const seen = require("./lib/seen");
 const catalog = require("./lib/catalog");
+const flows = require("./lib/flows");
 const { readJson, writeJson } = require("./lib/store");
 
 const PLUGIN_ID = "signalk-mikrotik";
@@ -13,6 +14,9 @@ const FQDN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
 // signalk-internet states we act on; offline, captive and null leave the router as it is.
 const PROFILE_FOR = { metered: "metered", online: "normal" };
 const SAMPLE_MS = 60_000;
+const FLOW_WAIT_MS = 3 * 60_000; // how long a flow waits for its DNS answer to show up in the cache
+const ADDRESS_KEEP_MS = 24 * 3_600_000; // connections outlive the DNS answer that started them
+const MAX_PENDING = 20_000;
 
 const schema = {
   type: "object",
@@ -44,6 +48,12 @@ const schema = {
       default: 0,
     },
     currency: { type: "string", title: "Currency", default: "USD" },
+    flowPort: {
+      type: "number",
+      title: "Traffic Flow port",
+      description: "UDP port for the router's Traffic Flow export (NetFlow v9 or IPFIX), for data volume per service. 0 turns it off. See docs/router-setup.md.",
+      default: 2055,
+    },
   },
 };
 
@@ -67,6 +77,13 @@ function targetsFor(cfg, allow) {
     for (const d of domains) forward.set(d, true);
   }
   for (const d of allow.domains) forward.set(d, true);
+  // An entry under a domain that already matches with subdomains adds nothing (mail.google.com under google.com).
+  const covered = (name) => {
+    const labels = name.split(".");
+    for (let i = 1; i < labels.length - 1; i++) if (forward.get(labels.slice(i).join(".")) === true) return true;
+    return false;
+  };
+  for (const name of [...forward.keys()]) if (covered(name)) forward.delete(name);
   return { addresses: fixed, forward };
 }
 
@@ -80,9 +97,10 @@ function allows(targets, name) {
 }
 
 module.exports = (app) => {
-  let ctx = null; // { client, cfg, ipv6, upstream, profile, usage, seen, allow } while running
+  let ctx = null; // { client, cfg, ipv6, upstream, profile, usage, seen, allow, addresses, pending, unmatched } while running
   let unsubscribe = null;
   let timer = null;
+  let stopFlows = null;
   let queue = Promise.resolve();
 
   // Serialise router work so quick state changes can't interleave on the router.
@@ -111,11 +129,49 @@ module.exports = (app) => {
       const now = Date.now();
       const targets = targetsFor(ctx.cfg, ctx.allow);
       const blocked = (name) => ctx.profile === "metered" && !allows(targets, name);
-      seen.prune(seen.record(ctx.seen, await seen.readNames(ctx.client), now, blocked), now);
+      const cache = await seen.readCache(ctx.client);
+      for (const [ip, name] of cache.addresses) ctx.addresses.set(ip, { name, t: now });
+      for (const [ip, { t }] of ctx.addresses) if (now - t > ADDRESS_KEEP_MS) ctx.addresses.delete(ip);
+      seen.prune(seen.record(ctx.seen, cache.names, now, blocked), now);
+      settlePending(now);
       writeJson(dataFile("seen.json"), ctx.seen);
+      writeJson(dataFile("unmatched.json"), ctx.unmatched);
     } catch (err) {
       app.debug(`DNS sample failed: ${err.message}`);
     }
+  }
+
+  /** Book a flow's bytes to the name its remote address was resolved for, or park it until the DNS cache knows. */
+  function onFlows(records) {
+    if (!ctx) return;
+    const now = Date.now();
+    for (const record of records) {
+      const remote = flows.remoteOf(record);
+      if (!remote) continue; // stays on board
+      const ip = flows.canonical(remote);
+      const name = ctx.addresses.get(ip)?.name;
+      if (name) seen.addBytes(ctx.seen, name, record.bytes, ctx.profile, now);
+      else if (ctx.pending.length < MAX_PENDING) ctx.pending.push({ ip, bytes: record.bytes, profile: ctx.profile, t: now });
+      else unmatched(record.bytes, ctx.profile, now);
+    }
+  }
+
+  function settlePending(now) {
+    ctx.pending = ctx.pending.filter((f) => {
+      const name = ctx.addresses.get(f.ip)?.name;
+      if (name) seen.addBytes(ctx.seen, name, f.bytes, f.profile, f.t);
+      else if (now - f.t > FLOW_WAIT_MS) unmatched(f.bytes, f.profile, f.t);
+      else return true;
+      return false;
+    });
+    const oldest = usage.dayOf(now - (seen.KEEP_DAYS - 1) * 86_400_000);
+    for (const day of Object.keys(ctx.unmatched)) if (day < oldest) delete ctx.unmatched[day];
+  }
+
+  /** Bytes to addresses no DNS answer explains (hard-coded IPs, DNS over HTTPS, answers older than a day). */
+  function unmatched(bytes, profile, t) {
+    const day = (ctx.unmatched[usage.dayOf(t)] ??= [0, 0]);
+    day[profile === "metered" ? 1 : 0] += bytes;
   }
 
   async function sampleUsage() {
@@ -189,6 +245,8 @@ module.exports = (app) => {
       keepDays: seen.KEEP_DAYS,
       v2fly: catalog.commit,
       fixed: [catalog.base, ...(ctx.cfg.starlink ? [{ ...catalog.starlink, hosts: [...catalog.starlink.hosts, ctx.cfg.starlinkSubnet] }] : [])],
+      flows: ctx.cfg.flowPort > 0,
+      unmatched: Object.values(ctx.unmatched).reduce((a, [n, m]) => [a[0] + n, a[1] + m], [0, 0]),
       services: Object.entries(byList).map(([id, hits]) => serviceView(id, hits)),
       domains: Object.entries(byDomain).map(([domain, hits]) => ({
         domain,
@@ -217,12 +275,14 @@ module.exports = (app) => {
         // Keep whatever profile the router has until signalk-internet says otherwise.
         const profile = (await router.currentProfile(client)) || "normal";
         const allow = readJson(dataFile("allowlist.json"), { services: [], domains: [] });
-        const warnings = await router.install(client, cfg, targetsFor(cfg, allow), profile, check.ipv6, check.upstream);
+        const { warnings } = await router.install(client, cfg, targetsFor(cfg, allow), profile, check.ipv6, check.upstream);
         for (const w of warnings) app.debug(w);
         ctx = {
           client, cfg, allow, ipv6: check.ipv6, upstream: check.upstream,
           usage: usage.load(usageFile()), seen: readJson(dataFile("seen.json"), {}),
+          addresses: new Map(), pending: [], unmatched: readJson(dataFile("unmatched.json"), {}),
         };
+        if (cfg.flowPort > 0) stopFlows = flows.listen(cfg.flowPort, onFlows, (err) => app.debug(`Traffic Flow: ${err.message}`));
         publish(profile);
         await sample();
         timer = setInterval(() => run(sample), SAMPLE_MS);
@@ -236,6 +296,9 @@ module.exports = (app) => {
       unsubscribe = null;
       clearInterval(timer);
       timer = null;
+      stopFlows?.();
+      stopFlows = null;
+      ctx?.client.close();
       ctx = null; // router keeps its current profile: fail safe
     },
 
@@ -250,8 +313,8 @@ module.exports = (app) => {
       r.get("/usage", (req, res) => {
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         const { from = "", to = "9999" } = req.query;
-        const days = Object.fromEntries(Object.entries(ctx.usage.days).filter(([d]) => d >= from && d <= to));
-        res.json({ profile: ctx.profile, pricePerGb: ctx.cfg.pricePerGb, currency: ctx.cfg.currency, days });
+        const pick = (buckets) => Object.fromEntries(Object.entries(buckets).filter(([k]) => k.slice(0, 10) >= from && k.slice(0, 10) <= to));
+        res.json({ profile: ctx.profile, pricePerGb: ctx.cfg.pricePerGb, currency: ctx.cfg.currency, days: pick(ctx.usage.days), hours: pick(ctx.usage.hours) });
       });
       // Search the whole v2fly catalog, for services nobody on board has used yet.
       r.get("/catalog", (req, res) => {
@@ -279,11 +342,12 @@ module.exports = (app) => {
         run(async () => {
           ctx.allow = { services: [...new Set(services)], domains: [...new Set(domains)] };
           writeJson(dataFile("allowlist.json"), ctx.allow);
-          const warnings = await router.syncHosts(ctx.client, targetsFor(ctx.cfg, ctx.allow), ctx.profile, ctx.upstream);
-          for (const w of warnings) app.debug(w);
+          const sync = await router.syncHosts(ctx.client, targetsFor(ctx.cfg, ctx.allow), ctx.profile, ctx.upstream);
+          for (const w of sync.warnings) app.debug(w);
+          app.debug(`allowlist sync: ${sync.added} added, ${sync.removed} removed in ${sync.ms} ms`);
           // While metered, names the router has cached skip the new FWD entries: make devices ask again.
           if (ctx.profile === "metered") await ctx.client.command("ip/dns/cache", "flush", {});
-          res.json(allowlistView());
+          res.json({ ...allowlistView(), sync });
         }).then(() => res.headersSent || res.status(502).json({ error: "saving failed, see plugin status" }));
       });
       r.post("/remove", (req, res) => {

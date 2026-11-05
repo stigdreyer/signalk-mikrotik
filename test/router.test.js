@@ -205,7 +205,21 @@ test("client surfaces auth failures with the RouterOS message", async () => {
 
 test("a router without FWD address-lists still gets the hostname entries, with a warning", async (t) => {
   const { fake, client } = await setup(t, { ...defconf(), rejectAdd: ["ip/dns/static"] });
-  const warnings = await router.install(client, { ...CFG, redirectDns: false }, TARGETS, "normal", false, UPSTREAM);
+  const { warnings } = await router.install(client, { ...CFG, redirectDns: false }, TARGETS, "normal", false, UPSTREAM);
   assert.match(warnings[0], /No subdomain matching/);
   assert.deepEqual(tagged(fake.tables["ip/firewall/address-list"]).map((r) => r.address), HOSTS);
+});
+
+test("sync adds and removes only the difference, and reports it", async (t) => {
+  const { fake, client } = await setup(t);
+  await router.install(client, CFG, TARGETS, "normal", true, UPSTREAM);
+  const forward = new Map(Array.from({ length: 30 }, (_, i) => [`d${i}.example.com`, true]));
+  let sync = await router.syncHosts(client, { addresses: HOSTS, forward }, "normal", UPSTREAM);
+  assert.deepEqual([sync.added, sync.removed], [30, 1], "30 new names, captive.apple.com's FWD entry gone");
+  assert.equal(tagged(fake.tables["ip/dns/static"]).length, 30);
+  forward.delete("d0.example.com");
+  sync = await router.syncHosts(client, { addresses: HOSTS, forward }, "normal", UPSTREAM);
+  assert.deepEqual([sync.added, sync.removed], [0, 1]);
+  assert.ok(sync.ms >= 0);
+  client.close();
 });

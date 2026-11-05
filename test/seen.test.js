@@ -23,7 +23,7 @@ test("record keeps the last sighting and distinct UTC days; prune drops old days
 test("blocked names get a timestamp, merge reports the latest", () => {
   const s = seen.record({}, ["x.docker.io", "y.docker.io"], T, (n) => n === "y.docker.io");
   assert.equal(s["x.docker.io"].blocked, undefined);
-  assert.deepEqual(seen.merge(Object.values(s)), { last: T, days: 1, blocked: T });
+  assert.deepEqual(seen.merge(Object.values(s)), { last: T, days: 1, blocked: T, bytes: [0, 0] });
 });
 
 test("catalog finds the v2fly list of a name, also behind Akamai, and groups the rest by domain", () => {

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MikroTik Data Usage</title>
 <link rel="stylesheet" href="style.css">
+<script src="mode.js"></script>
 </head>
 <body>
 <main>
@@ -14,6 +15,7 @@
   <div id="message" class="error"></div>
 
   <div class="row tabs" id="months" role="tablist"></div>
+  <div class="row tabs" id="zone" role="group" aria-label="Days in"></div>
   <div class="tiles" id="tiles"></div>
 
   <div class="chart" id="chart">
@@ -35,7 +37,7 @@
     <div id="preflight" class="muted">…</div>
   </section>
 
-  <p class="muted">Days are UTC, like Starlink's. Bytes are counted at the router's WAN interface, so they include
+  <p class="muted"><span id="zonenote"></span> Bytes are counted at the router's WAN interface, so they include
     protocol overhead and the router's own traffic, but not the dish's own traffic. GB = 10<sup>9</sup> bytes.</p>
 </main>
 <script>
@@ -46,6 +48,46 @@ const gb = (bytes) => (bytes / GB).toFixed(bytes < 10 * GB ? 2 : 1);
 const sum = (b) => b.rx + b.tx;
 let data;
 let month;
+// Days in the viewer's time zone by default; UTC days line up with Starlink's Data Usage page.
+let zone = "local";
+try { zone = localStorage.getItem("signalk-mikrotik-zone") || "local"; } catch {}
+const localDay = (ms) => new Date(ms).toLocaleDateString("sv-SE"); // sv-SE formats as YYYY-MM-DD
+
+/** Daily totals { "YYYY-MM-DD": {normal, metered} } in the chosen zone. */
+function dayTotals() {
+  if (zone === "utc") return data.days;
+  const out = {};
+  const add = (key, bucket) => {
+    const t = (out[key] ??= { normal: { rx: 0, tx: 0 }, metered: { rx: 0, tx: 0 } });
+    for (const p of ["normal", "metered"]) { t[p].rx += bucket[p].rx; t[p].tx += bucket[p].tx; }
+  };
+  for (const [hour, bucket] of Object.entries(data.hours ?? {})) add(localDay(Date.parse(`${hour}:00:00Z`)), bucket);
+  // Days from before hourly buckets existed only have their UTC total: show it under the same date.
+  const hourly = new Set(Object.keys(data.hours ?? {}).map((h) => h.slice(0, 10)));
+  for (const [day, bucket] of Object.entries(data.days)) if (!hourly.has(day)) add(day, bucket);
+  return out;
+}
+
+function renderZone() {
+  const offset = -new Date().getTimezoneOffset() / 60;
+  const name = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const options = [["local", `Local (${name}, UTC${offset >= 0 ? "+" : ""}${offset})`], ["utc", "UTC, like Starlink"]];
+  $("zone").replaceChildren(...options.map(([z, label]) => {
+    const b = Object.assign(document.createElement("button"), { textContent: label });
+    b.setAttribute("aria-pressed", z === zone);
+    b.setAttribute("aria-selected", z === zone);
+    b.onclick = () => {
+      zone = z;
+      try { localStorage.setItem("signalk-mikrotik-zone", z); } catch {}
+      month = null;
+      render();
+    };
+    return b;
+  }));
+  $("zonenote").textContent = zone === "utc"
+    ? "Days are UTC, like Starlink's."
+    : `Days are in this device's time zone (${name}). Switch to UTC to compare with Starlink's Data Usage page.`;
+}
 
 async function get(path) {
   const res = await fetch(API + path, { credentials: "same-origin" });
@@ -54,19 +96,19 @@ async function get(path) {
   return res.json();
 }
 
-function daysOfMonth(m) {
+function daysOfMonth(m, totals) {
   const [y, mo] = m.split("-").map(Number);
   const n = new Date(Date.UTC(y, mo, 0)).getUTCDate();
   return Array.from({ length: n }, (_, i) => {
     const key = `${m}-${String(i + 1).padStart(2, "0")}`;
-    const day = data.days[key];
+    const day = totals[key];
     return { key, d: i + 1, normal: day ? sum(day.normal) : 0, metered: day ? sum(day.metered) : 0 };
   });
 }
 
 function renderTabs() {
-  const now = new Date().toISOString().slice(0, 7);
-  const months = [...new Set([...Object.keys(data.days).map((d) => d.slice(0, 7)), now])].sort();
+  const now = (zone === "utc" ? new Date().toISOString() : localDay(Date.now())).slice(0, 7);
+  const months = [...new Set([...Object.keys(dayTotals()).map((d) => d.slice(0, 7)), now])].sort();
   month ??= now;
   $("months").replaceChildren(...months.map((m) => {
     const b = document.createElement("button");
@@ -157,13 +199,14 @@ function renderChart(days) {
 
 function renderTable(days) {
   const rows = days.filter((d) => d.normal || d.metered);
-  $("table").innerHTML = "<tr><th>Day (UTC)</th><th>Normal GB</th><th>Metered GB</th></tr>" +
+  $("table").innerHTML = `<tr><th>Day (${zone === "utc" ? "UTC" : "local"})</th>`+"<th>Normal GB</th><th>Metered GB</th></tr>" +
     rows.map((d) => `<tr><td>${d.key}</td><td>${gb(d.normal)}</td><td>${gb(d.metered)}</td></tr>`).join("");
 }
 
 function render() {
+  renderZone();
   renderTabs();
-  const days = daysOfMonth(month);
+  const days = daysOfMonth(month, dayTotals());
   renderTiles(days);
   renderChart(days);
   renderTable(days);

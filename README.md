@@ -103,8 +103,9 @@ Everything else that goes out to WAN is dropped.
 ## Data usage dashboard
 
 Every 60 seconds the plugin reads the byte counters of the WAN interfaces and
-books the growth to the current UTC day, split into **normal** and
-**metered** by the profile that was active. The Signal K webapp **MikroTik
+books the growth to the current UTC day and hour, split into **normal** and
+**metered** by the profile that was active. The webapp shows days in the
+device's own time zone, or in UTC to line up with Starlink's figures. The Signal K webapp **MikroTik
 Data Usage** shows daily bars per month, the totals and, if you set a price
 per metered GB, the estimated cost. You can check it against Starlink's own
 Data Usage page.
@@ -140,6 +141,12 @@ shows:
   first ("seen 3 min ago · 9 days"). Details show the names looked up, how
   many domains allowing it opens, and v2fly's hierarchy (Apple includes
   iCloud, Apple TV+, Apple update, …).
+- **Data volume** per service and domain over the last 14 days, with the
+  metered part, sorted by volume (optional, needs the router's Traffic Flow
+  export, see [router-setup.md](docs/router-setup.md#5-optional-traffic-flow-for-data-volume-per-service)).
+  The router reports every connection, and the plugin books its bytes to the
+  name the device looked up, following CNAMEs, so CDN traffic counts for the
+  service using it.
 - **Search** filters what was seen and also searches the whole v2fly catalog,
   so you can allow a service before anyone used it.
 - **Category chips** from v2fly filter the list; ads and tracking are hidden
@@ -158,6 +165,14 @@ as their DNS server, so hand out the router first via DHCP if you want to
 build your list in port. The easiest way: a short session in port using each
 app the way you would at sea, including the Starlink app (open Data Usage,
 toggle a setting), then pick from the list.
+
+## Night mode
+
+Both webapp pages have a night mode: red on black, so nobody on watch loses
+their night vision. By default it follows the vessel's day/night mode
+(`environment.mode`, e.g. from signalk-derived-data), like other Signal K
+apps. The **Mode** button in the page header forces night or day on that
+device instead.
 
 ## What it does on the router
 

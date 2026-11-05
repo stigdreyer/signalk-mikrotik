@@ -43,7 +43,23 @@ th:first-child, td:first-child { text-align: left; }
 .error { color: var(--error); }
 section { margin-top: 24px; }
 h2 { font-size: 16px; margin: 0 0 8px; }
-nav { display: flex; gap: 16px; margin-bottom: 12px; }
+nav { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
 nav a { color: var(--text-2); text-decoration: none; }
 nav a[aria-current] { color: var(--text); font-weight: 600; }
 
+input[type="checkbox"] { accent-color: var(--text); }
+.modebtn { margin-left: auto; font: inherit; font-size: 13px; padding: 2px 10px; border: 1px solid var(--grid); border-radius: 14px; background: none; color: var(--text-2); cursor: pointer; }
+
+/* Night: red on black only, so nobody on watch loses their night vision. Series stay apart by lightness. */
+:root[data-mode="night"] {
+  color-scheme: dark;
+  --surface: #000000;
+  --panel: #140000;
+  --text: #c81e1e;
+  --text-2: #861414;
+  --grid: #2e0707;
+  --normal: #6e0f0f;
+  --metered: #e23434;
+  --error: #ff4a4a;
+}
+:root[data-mode="night"] ::placeholder { color: var(--text-2); }

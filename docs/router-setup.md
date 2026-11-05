@@ -139,7 +139,35 @@ dig @<router-ip> SRV _api._tcp.radio-browser.info
 
 The `FWD` entries still forward to the first plain server in `servers`.
 
-## 5. Plugin config
+## 5. Optional: Traffic Flow for data volume per service
+
+The Allowlist page can show how much data each service used. For that the
+router exports its connections (NetFlow v9 or IPFIX) to the plugin, and the
+plugin matches each remote address to the name a device looked up. Replace
+the address with your Signal K server's:
+
+```routeros
+/ip traffic-flow set enabled=yes interfaces=all active-flow-timeout=1m inactive-flow-timeout=15s
+/ip traffic-flow target add dst-address=<signalk-server-ip> port=2055 version=ipfix
+```
+
+The port must match **Traffic Flow port** in the plugin config (default
+2055; 0 turns it off). The plugin's preflight warns when no target points at
+it.
+
+Check after a day that the volumes add up: the sum on the Allowlist page
+should be close to the day's total on the Usage page. Traffic to addresses no
+DNS lookup explains (hard-coded IPs, DNS over HTTPS) is shown as one extra
+line.
+
+To turn it off again:
+
+```routeros
+/ip traffic-flow set enabled=no
+/ip traffic-flow target remove [find port=2055]
+```
+
+## 6. Plugin config
 
 In Signal K → Server → Plugin Config → **MikroTik metered firewall**:
 

@@ -202,8 +202,18 @@ is worth raising with Starlink.
 - DNS log via remote syslog instead of cache polling: every lookup in real
   time with the client IP, so per device, no sampling gaps. Check first that
   RouterOS logs the client IP.
-- Traffic Flow (IPFIX) for bytes per device and service on the usage page.
-  Check first whether it sees fasttracked connections.
+- ~~Traffic Flow for bytes per service~~: built in 0.6.0 for the Allowlist
+  page (NetFlow v9/IPFIX receiver, IP-to-name map from the DNS cache with
+  CNAMEs followed back, bytes per name, day and profile in `seen.json`, flows
+  waiting up to 3 min for their DNS answer, the rest as "unmatched").
+  Still to check on the router: totals against the WAN counters (fasttrack,
+  double counting with `interfaces=all`). Next: the same data per device
+  (source address + DHCP leases) and as a breakdown on the Usage page.
+- ~~Faster router sync~~ (0.6.0): keep-alive REST connections, 4 calls in
+  parallel, no FWD entry under a domain already matched with subdomains
+  (Apple 1,823 -> 1,584 entries), save time shown on the page. Next if still
+  slow: batch writes via `/rest/execute` scripts (check the user's policies),
+  and warn about big umbrella services (Apple, Google, Microsoft) in the UI.
 - Own overlay on v2fly only once the UX has settled (e.g. Gmail out of
   `google`, Starlink out of `spacex`, marine services).
 
