@@ -6,6 +6,15 @@ Versions before 1.0.0 were development releases; each links to its commit.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-06
+
+### Fixed
+- The package names its GitHub repository in full, so the Signal K plugin registry can find the source and run the
+  tests.
+
+### Added
+- Signal K's shared plugin CI, which tests every change on Linux, macOS and Windows with Node 22, 24 and 26.
+
 ## [1.0.0] - 2026-11-06
 
 The first public release, on npm and in the Signal K Appstore.
@@ -136,7 +145,8 @@ The first public release, on npm and in the Signal K Appstore.
 - Switches the MikroTik firewall to an allowlist while signalk-internet reports the connection as metered, and
   back when it's online again. Only router entries marked `signalk-mikrotik` are touched.
 
-[Unreleased]: https://github.com/stigdreyer/signalk-mikrotik/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/stigdreyer/signalk-mikrotik/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/stigdreyer/signalk-mikrotik/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/stigdreyer/signalk-mikrotik/releases/tag/v1.0.0
 [0.1.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/4abb632
 [0.2.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/7c4a4ca

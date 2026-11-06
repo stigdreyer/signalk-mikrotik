@@ -1,0 +1,24 @@
+# Signal K's shared plugin CI: tests the plugin on Linux (x64 and arm64), macOS and Windows with Node 22, 24 and 26.
+# The Signal K plugin registry deducts points unless the commit a version is published from has a passing run of it.
+# Template: SignalK/signalk-server docs/develop/plugins/examples/plugin-caller-example.yml
+name: SignalK Plugin CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      enable-signalk-integration:
+        description: Start a Signal K server and install the plugin for integration testing
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  plugin-ci:
+    uses: SignalK/signalk-server/.github/workflows/plugin-ci.yml@master
+    with:
+      test-command: npm test
+      build-command: npm run build --if-present
+      enable-signalk-integration: ${{ github.event_name == 'workflow_dispatch' && inputs.enable-signalk-integration }}

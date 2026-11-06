@@ -1,11 +1,14 @@
 {
   "name": "signalk-mikrotik",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Signal K plugin that locks a MikroTik router down to an allowlist while the internet connection is metered, and shows data usage",
   "main": "index.js",
   "license": "EUPL-1.2",
   "author": "Stig Dreyer",
-  "repository": "github:stigdreyer/signalk-mikrotik",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stigdreyer/signalk-mikrotik.git"
+  },
   "homepage": "https://github.com/stigdreyer/signalk-mikrotik#readme",
   "bugs": {
     "url": "https://github.com/stigdreyer/signalk-mikrotik/issues"
