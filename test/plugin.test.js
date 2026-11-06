@@ -285,3 +285,41 @@ test("allowing a service skips names its own domains already cover, and reports 
   assert.equal(body.sync.added - body.sync.removed, names.size - before);
   plugin.stop();
 });
+
+test("not set up: no router calls, a pointer to Setup, and the Setup routes answer", async (t) => {
+  const app = fakeApp();
+  const plugin = createPlugin(app);
+  await plugin.start({}); // straight from the appstore, enabled by default with no config
+  assert.match(app.status, /Not set up yet/);
+  assert.equal(app.error, null);
+  const { body } = await call(plugin, "get", "/setup");
+  assert.equal(body.setUp, false);
+  assert.equal(body.running, false);
+  assert.equal(body.config.url, "https://192.168.88.1");
+  assert.ok(Array.isArray(body.addresses));
+  assert.equal("password" in body.config, false, "the password never goes back to the page");
+  plugin.stop();
+});
+
+test("Setup's connection test checks the router without changing it", async (t) => {
+  const fake = await fakeRouter(defconf());
+  t.after(() => fake.close());
+  const plugin = createPlugin(fakeApp());
+  let { body } = await call(plugin, "post", "/setup/test", { body: { url: fake.url, username: "u", password: "p" } });
+  assert.equal(body.ok, true);
+  assert.equal(fake.tables["ip/firewall/filter"].filter((r) => r.comment === "signalk-mikrotik").length, 0);
+  ({ body } = await call(plugin, "post", "/setup/test", { body: { url: "192.168.88.1" } }));
+  assert.match(body.error, /should look like https:\/\//);
+});
+
+test("an unreachable router is explained in plain words and retried", async (t) => {
+  const app = fakeApp();
+  const plugin = createPlugin(app);
+  t.after(() => plugin.stop());
+  await plugin.start({ url: "https://127.0.0.1:9", username: "u", password: "p" });
+  assert.match(app.error, /Nothing answers at 127\.0\.0\.1:9.*Trying again every minute/);
+  const { body } = await call(plugin, "get", "/setup");
+  assert.equal(body.setUp, true);
+  assert.equal(body.running, false);
+  assert.match(body.error, /Nothing answers/);
+});

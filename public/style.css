@@ -57,7 +57,7 @@ body { margin: 0; padding: 16px; background: var(--surface); color: var(--text);
 ::selection { background: var(--text); color: var(--surface); }
 ::placeholder { color: var(--text-2); opacity: 1; }
 :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-main { max-width: 900px; margin: 0 auto; }
+main { max-width: 1120px; margin: 0 auto; } /* one width for every page, so the header never jumps between them */
 h1 { font-size: 1.25rem; margin: 0 0 4px; }
 h2 { font-size: 1rem; margin: 0 0 8px; }
 p { max-width: 56ch; text-wrap: pretty; } /* ch is a "0": 56ch holds about 75 characters of prose */
@@ -69,6 +69,11 @@ section { margin-top: 24px; }
 /* State as a shape, not only a colour: night mode has one hue. */
 .badge { display: inline-block; font-size: 0.8125rem; font-weight: 700; padding: 0 6px; margin-right: 6px; border: 1.5px solid var(--warn); border-radius: 4px; }
 .badge.normal { border-color: var(--text-2); }
+/* Shown instead of a page when the plugin isn't running: a pointer to Setup, not an error. */
+main.is-notready > :not(.notready) { display: none; }
+.notready { max-width: 56ch; margin: 24px 0; }
+.notready h1 { margin-bottom: 8px; }
+.notready .primary { display: inline-flex; align-items: center; text-decoration: none; margin-top: 8px; }
 .textlink { color: var(--text); text-underline-offset: 3px; display: inline-block; padding: 6px 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
 summary { cursor: pointer; padding: 6px 0; }
@@ -77,7 +82,7 @@ button { font: inherit; color: var(--text); }
 /* App bar: who this is, then the two pages as tabs. The current tab carries a bar and bold type, so it reads as
    "you are here" without relying on colour. */
 .appbar { margin: -16px -16px 20px; padding: 12px 16px 0; background: var(--panel); border-bottom: 1px solid var(--grid); }
-.appbar-in { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px 16px; }
+.appbar-in { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px 16px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; min-width: 0; }
 /* The Valve symbol (brand/logo): ink ring, orange lever; in night mode both take the night red. */
 .brand .mark { width: 32px; height: 32px; flex: none; }
@@ -102,6 +107,7 @@ button { font: inherit; color: var(--text); }
   .appbar-in { grid-template-columns: 1fr; }
   .modes { justify-self: start; }
 }
+html.routing body { visibility: hidden; } /* mode.js picks the start page; see entry() */
 .appbar:empty { min-height: 118px; } /* holds the header's room until mode.js fills it */
 
 /* Pills: a row of separate choices (months, filter chips). */

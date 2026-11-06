@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup · MikroTik Data Meter</title>
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icons/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#F3F2EF">
+<link rel="stylesheet" href="style.css">
+<script src="mode.js"></script>
+<style>
+  .intro { margin: 4px 0 20px; }
+  .steps { list-style: none; margin: 0; padding: 0; max-width: 760px; }
+  .step { border-top: 1px solid var(--grid); padding: 18px 0 22px; }
+  .step-head { display: flex; align-items: center; gap: 12px; }
+  .step-head h2 { margin: 0; font-size: 1rem; }
+  /* Done is a filled disc with a tick, to do an empty ring: the state reads without colour. */
+  .mark { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center;
+    font-size: 0.8125rem; font-weight: 700; color: var(--text-2); }
+  .mark.done { background: var(--fill); border-color: var(--text); color: var(--on-fill); }
+  .mark svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .step-body { margin: 8px 0 0 38px; }
+  .step-body p { margin: 6px 0; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 16px; margin: 12px 0; }
+  .field { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--text-2); }
+  .field input, .field select { font: inherit; font-size: 0.9375rem; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--surface); color: var(--text); width: 100%; }
+  .check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+  .script { width: 100%; min-height: 220px; font: 0.8125rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--panel); color: var(--text); resize: vertical; white-space: pre; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 10px; }
+  .secondary { font: inherit; min-height: 40px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: none; cursor: pointer; }
+  .linkbtn { font-size: 0.8125rem; background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 2px; min-height: 44px; color: var(--text); }
+  .result { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+  .result li { display: flex; gap: 8px; align-items: baseline; }
+  .result li svg { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transform: translateY(2px); }
+  .status { margin: 0 0 8px; }
+  .muted.small { font-size: 0.8125rem; }
+  @media (max-width: 600px) { .step-body { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header class="appbar"></header>
+<main>
+  <h1>Set up MikroTik Data Meter</h1>
+  <p class="intro muted" id="intro">Four steps from installed to metering. Each one shows a tick when it's done.</p>
+  <div id="message" class="error" role="alert"></div>
+
+  <ol class="steps">
+    <li class="step" id="step1">
+      <div class="step-head"><span class="mark" id="mark1">1</span><h2>Internet state from signalk-internet</h2></div>
+      <div class="step-body">
+        <p>The router switches to the allowlist when <strong>signalk-internet</strong> (Internet Connectivity Monitor) says the connection is metered. It's installed together with this plugin.</p>
+        <p id="internet" class="status" role="status">Checking…</p>
+      </div>
+    </li>
+
+    <li class="step" id="step2">
+      <div class="step-head"><span class="mark" id="mark2">2</span><h2>Prepare the router</h2></div>
+      <div class="step-body">
+        <p>Paste this script into the MikroTik's terminal (WinBox → New Terminal, or SSH). It turns on the secure REST API, creates a user for this plugin that can only log in from this Signal K server, sets the router's DNS options and sends connection data here. It's safe to run again.</p>
+        <p id="redo" class="muted small" hidden>The router is already set up. Running a new script gives the plugin user a new password; enter it in step 3 afterwards.</p>
+        <div class="fields">
+          <label class="field">This Signal K server's address<select id="server"></select></label>
+          <label class="field">Router user for the plugin<input id="username" autocomplete="off" value="signalk"></label>
+        </div>
+        <textarea class="script" id="script" readonly aria-label="RouterOS setup script"></textarea>
+        <div class="actions">
+          <button class="primary" id="copy">Copy script</button>
+          <button class="linkbtn" id="newpw">New password</button>
+          <span class="muted small" id="copied" role="status"></span>
+        </div>
+      </div>
+    </li>
+
+    <li class="step" id="step3">
+      <div class="step-head"><span class="mark" id="mark3">3</span><h2>Connect to the router</h2></div>
+      <div class="step-body">
+        <div class="fields">
+          <label class="field">Router address<input id="url" inputmode="url" autocomplete="off" placeholder="https://192.168.88.1"></label>
+          <label class="field">Password<input id="password" type="password" autocomplete="off"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="selfsigned"> Accept the router's self-signed certificate</label>
+        <div class="actions"><button class="secondary" id="test">Test connection</button><span class="muted small">Checks the router; changes nothing.</span></div>
+        <ul class="result" id="testresult" aria-live="polite"></ul>
+      </div>
+    </li>
+
+    <li class="step" id="step4">
+      <div class="step-head"><span class="mark" id="mark4">4</span><h2>Your plan, then start</h2></div>
+      <div class="step-body">
+        <p>Optional, for the Data usage page: when your billing cycle starts and what a metered GB costs.</p>
+        <div class="fields">
+          <label class="field">Billing day (1–31)<input id="billingDay" type="number" min="1" max="31" inputmode="numeric"></label>
+          <label class="field">Price per metered GB<input id="price" type="number" min="0" step="0.01" inputmode="decimal"></label>
+          <label class="field">Currency<input id="currency" autocomplete="off"></label>
+        </div>
+        <p class="muted small">Starting puts the plugin's firewall and DNS entries on the router, all marked <code>signalk-mikrotik</code>. They stay off until the connection is metered, and the plugin can remove them again.</p>
+        <div class="actions"><button class="primary" id="save">Save and start</button><span id="savestatus" role="status"></span></div>
+      </div>
+    </li>
+  </ol>
+</main>
+<script>
+const API = "/plugins/signalk-mikrotik";
+const $ = (id) => document.getElementById(id);
+let state;      // GET /setup
+let tested = false;
+const TICK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>';
+// Check results: tick for passed, a bang for something to fix, a cross for what stops the plugin.
+const ICONS = {
+  ok: TICK,
+  warn: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v6.5M8 12.8v.2"/></svg>',
+  error: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+};
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { credentials: "same-origin", ...opts, headers: opts.body ? { "content-type": "application/json" } : {} });
+  if (res.status === 401 || res.status === 403) throw new Error("Log in to the Signal K admin UI first: setup needs an admin.");
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+}
+
+function mark(n, done, label) {
+  const m = $(`mark${n}`);
+  m.className = done ? "mark done" : "mark";
+  m.innerHTML = done ? TICK : String(n);
+  m.setAttribute("aria-label", `Step ${n}: ${done ? "done" : label ?? "to do"}`);
+}
+
+/** A password RouterOS takes without quoting trouble: letters and digits only. */
+function newPassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  return Array.from(crypto.getRandomValues(new Uint32Array(24)), (n) => chars[n % chars.length]).join("");
+}
+let password = newPassword();
+
+/** The server's LAN as a subnet, from its address and prefix (e.g. 192.168.88.10/24 → 192.168.88.0/24). */
+function subnet(cidr) {
+  const [ip, bits] = cidr.split("/");
+  const n = ip.split(".").reduce((a, b) => (a << 8) + Number(b), 0) >>> 0;
+  const mask = Number(bits) === 0 ? 0 : (~0 << (32 - Number(bits))) >>> 0;
+  const net = (n & mask) >>> 0;
+  return `${[24, 16, 8, 0].map((s) => (net >>> s) & 255).join(".")}/${bits}`;
+}
+
+function renderScript() {
+  const a = state.addresses.find((x) => x.address === $("server").value) ?? state.addresses[0];
+  const ip = a?.address ?? "<signalk-server-ip>";
+  const lan = a ? subnet(a.cidr) : "<lan-subnet>";
+  const user = $("username").value.trim() || "signalk";
+  const port = state.config.flowPort;
+  const lines = [
+    `# MikroTik Data Meter: router setup for the Signal K server at ${ip}. Safe to run again.`,
+    `:if ([:len [/certificate find name="signalk-rest"]] = 0) do={ /certificate add name=signalk-rest common-name=router days-valid=3650; /certificate sign signalk-rest; :delay 5s }`,
+    `/ip service set www-ssl certificate=signalk-rest disabled=no address=${lan}`,
+    `:do { /ip dhcp-server lease make-static [find address=${ip}] } on-error={}`,
+    `:if ([:len [/user group find name="${user}"]] = 0) do={ /user group add name=${user} policy=read,write,api,rest-api }`,
+    `:if ([:len [/user find name="${user}"]] = 0) do={ /user add name=${user} group=${user} password="${password}" address=${ip}/32 } else={ /user set [find name="${user}"] group=${user} password="${password}" address=${ip}/32 }`,
+    `/ip dns set allow-remote-requests=yes address-list-extra-time=1d`,
+    ...(port > 0 ? [
+      `/ip traffic-flow set enabled=yes interfaces=all active-flow-timeout=1m inactive-flow-timeout=15s`,
+      `:if ([:len [/ip traffic-flow target find dst-address=${ip} port=${port}]] = 0) do={ /ip traffic-flow target add dst-address=${ip} port=${port} version=ipfix }`,
+    ] : []),
+  ];
+  $("script").value = lines.join("\n");
+}
+
+function renderInternet() {
+  const s = state.internet;
+  $("internet").replaceChildren(s
+    ? `Found: signalk-internet reports the connection as ${s}.`
+    : Object.assign(document.createElement("span"), { className: "warn", textContent: "Not found. Install \"Internet Connectivity Monitor\" from the Signal K Appstore, restart Signal K, then reload this page." }));
+  mark(1, Boolean(s));
+}
+
+function renderStatus() {
+  if (state.running) {
+    $("intro").textContent = `Running. The router is in ${state.profile} mode. You can change the settings below at any time.`;
+    mark(4, true);
+  } else if (state.error) {
+    $("intro").replaceChildren(Object.assign(document.createElement("span"), { className: "error", textContent: `Not connected: ${state.error}` }));
+  }
+  if (state.hasPassword) mark(2, true);
+  mark(3, state.running || tested);
+}
+
+async function load() {
+  try {
+    state = await api("/setup");
+  } catch (err) {
+    $("message").textContent = err.message;
+    return;
+  }
+  $("server").replaceChildren(...state.addresses.map((a) => Object.assign(document.createElement("option"), { value: a.address, textContent: `${a.address} (${a.name})` })));
+  $("url").value = state.config.url;
+  $("username").value = state.config.username;
+  $("selfsigned").checked = state.config.allowSelfSigned;
+  $("billingDay").value = state.config.billingDay;
+  $("price").value = state.config.pricePerGb;
+  $("currency").value = state.config.currency;
+  $("redo").hidden = !state.hasPassword;
+  $("password").placeholder = state.hasPassword ? "Unchanged (saved)" : "";
+  if (!state.hasPassword) $("password").value = password;
+  renderScript();
+  renderInternet();
+  renderStatus();
+}
+
+$("server").onchange = renderScript;
+$("username").oninput = renderScript;
+$("newpw").onclick = () => {
+  password = newPassword();
+  $("password").value = password;
+  renderScript();
+  $("copied").textContent = "New password made. Run the script again, then test the connection.";
+};
+$("copy").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($("script").value);
+    $("copied").textContent = "Copied. Paste it into the router's terminal.";
+  } catch {
+    $("script").select(); // no clipboard (plain http): select it for Cmd/Ctrl+C
+    $("copied").textContent = "Selected: press Cmd+C or Ctrl+C to copy.";
+  }
+  mark(2, true);
+};
+
+const connection = () => ({
+  url: $("url").value.trim().replace(/\/+$/, ""),
+  username: $("username").value.trim() || "signalk",
+  password: $("password").value,
+  allowSelfSigned: $("selfsigned").checked,
+});
+
+$("test").onclick = async () => {
+  const out = $("testresult");
+  out.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Checking the router…" }));
+  try {
+    const r = await api("/setup/test", { method: "POST", body: JSON.stringify(connection()) });
+    const li = (cls, text) => {
+      const item = Object.assign(document.createElement("li"), { className: cls });
+      item.innerHTML = ICONS[cls];
+      item.append(text);
+      return item;
+    };
+    out.replaceChildren(
+      ...(r.ok ? [li("ok", `Connected: RouterOS ${r.version}.`)] : []),
+      ...r.errors.map((e) => li("error", e)),
+      ...r.warnings.map((w) => li("warn", w)));
+    tested = r.ok;
+    mark(3, r.ok);
+  } catch (err) {
+    out.replaceChildren(Object.assign(document.createElement("li"), { className: "error", textContent: err.message }));
+  }
+};
+
+$("save").onclick = async () => {
+  const c = connection();
+  if (!c.password && !state.hasPassword) {
+    $("savestatus").className = "error";
+    $("savestatus").textContent = "Enter the router password (step 3) first.";
+    return;
+  }
+  $("save").disabled = true;
+  $("savestatus").className = "muted";
+  $("savestatus").textContent = "Saving…";
+  try {
+    // Signal K's own plugin settings: keep what's there, add the router and plan, and enable the plugin.
+    const res = await fetch(`${API}/config`, { credentials: "same-origin" });
+    if (res.status === 401 || res.status === 403) throw new Error("Log in to the Signal K admin UI first: saving needs an admin.");
+    const options = await res.json();
+    const configuration = {
+      ...options.configuration, ...c,
+      password: c.password || options.configuration?.password,
+      billingDay: Number($("billingDay").value) || 1,
+      pricePerGb: Number($("price").value) || 0,
+      currency: $("currency").value.trim() || "USD",
+    };
+    const saved = await fetch(`${API}/config`, {
+      method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...options, enabled: true, configuration }),
+    });
+    if (!saved.ok) throw new Error(`Signal K didn't save the settings (HTTP ${saved.status}).`);
+    $("savestatus").textContent = "Saved. Starting: checking the router and putting the plugin's entries on it…";
+    // The plugin restarts with the new settings; wait until it runs or says why not.
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      state = await api("/setup");
+      if (state.running || state.error) break;
+    }
+    renderStatus();
+    if (state.running) {
+      $("savestatus").className = "";
+      $("savestatus").replaceChildren(`Running. The router is in ${state.profile} mode. `,
+        Object.assign(document.createElement("a"), { href: "index.html", textContent: "See Data usage" }), " or ",
+        Object.assign(document.createElement("a"), { href: "allowlist.html", textContent: "choose what's allowed while metered" }), ".");
+    } else {
+      $("savestatus").className = "error";
+      $("savestatus").textContent = state.error ? `Saved, but not running: ${state.error}` : "Saved. Still starting: reload this page in a minute.";
+    }
+  } catch (err) {
+    $("savestatus").className = "error";
+    $("savestatus").textContent = err.message;
+  } finally {
+    $("save").disabled = false;
+  }
+};
+
+load();
+</script>
+</body>
+</html>

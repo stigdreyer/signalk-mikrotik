@@ -32,16 +32,15 @@
   .key.blocked::before { background: repeating-linear-gradient(135deg, var(--line) 0 2px, var(--panel) 2px 4px); outline: 1px solid var(--line); outline-offset: -1px; }
   .share .note { font-size: 0.8125rem; margin: 6px 0 0; }
 
-  main, .appbar-in { max-width: 1120px; } /* room for the filter column beside the list; the header lines up with it */
   /* Browse: a filter and sort column beside the list (desktop); one "Filter & sort" section above it on phones. */
   .browse { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: start; margin-top: 16px; }
-  /* Sticky beside the list and never taller than the space above the sticky save bar, so its end (Show all,
-     Clear filters) is always reachable without scrolling the list to the bottom. */
-  .side { position: sticky; top: 0; max-height: calc(100vh - var(--savebar, 72px)); overflow-y: auto; padding: 12px 14px 16px 0; } /* right padding: the counts stay clear of an overlay scrollbar */
+  /* One scroll for the whole page. The column sticks beside the list when it fits the window; when it is taller
+     (Show all), it scrolls with the page until its end is in view above the save bar, then sticks there. */
+  .side { position: sticky; top: var(--side-top, 0px); padding: 12px 0 16px; }
   .side > details > summary { display: none; }
   .group + .group { margin-top: 20px; }
   .side h2 { font-size: 0.8125rem; font-weight: 600; color: var(--text-2); margin: 0 0 4px; }
-  .opt { display: flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; }
+  .opt { display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer; }
   .opt .n { margin-left: auto; font-size: 0.8125rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .toolbar { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 12px 0 8px; border-bottom: 1px solid var(--grid); }
   input[type="search"] { font: inherit; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
@@ -81,7 +80,7 @@
 
   @media (max-width: 760px) {
     .browse { grid-template-columns: 1fr; gap: 0; }
-    .side { position: static; max-height: none; overflow: visible; padding: 0; border-bottom: 1px solid var(--grid); }
+    .side { position: static; padding: 0; border-bottom: 1px solid var(--grid); }
     .side > details > summary { display: list-item; min-height: 44px; padding: 12px 0; font-size: 0.875rem; color: var(--text-2); }
     .side > details[open] { padding-bottom: 12px; }
     .toolbar { position: static; }
@@ -153,7 +152,7 @@ let picked;            // { services: Set, domains: Set } as edited
 let catalogHits = [];  // GET /catalog results for the current search
 const filter = { categories: new Set(), ads: false, blocked: false, q: "", period: null, sort: "data" }; // period: "days" or "since" the reset; categories by label
 const SORTS = [["data", "Most data"], ["name", "Name, A–Z"], ["recent", "Recently seen"], ["days", "Most days seen"]];
-const CATEGORIES_SHOWN = 12; // the long tail folds behind "Show all"
+const CATEGORIES_SHOWN = 10; // the long tail folds behind "Show all", so the column usually fits the window
 let allCategories = false;
 const open = new Set(); // rows with their details open
 let flashed = new Set(); // rows just saved, marked for a moment
@@ -413,6 +412,7 @@ function render() {
   // Everything below is rebuilt: remember what had focus, so keyboard and screen-reader users keep their place.
   const focused = document.activeElement?.id;
   draw();
+  placeSide(); // also after every redraw: a resize observer may not fire while the tab is in the background
   if (focused && document.activeElement === document.body) document.getElementById(focused)?.focus({ preventScroll: true });
 }
 
@@ -534,9 +534,16 @@ $("search").oninput = () => {
 };
 
 $("discard").onclick = () => show(view);
-// The save bar's height changes with its preview text; the filter column keeps clear of it.
-new ResizeObserver(([entry]) => document.documentElement.style.setProperty("--savebar", `${Math.ceil(entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight)}px`))
-  .observe(document.querySelector(".savebar"));
+// Where the filter column sticks: at the top when it fits above the save bar, else as far up as keeps its end
+// visible above the save bar (whose height changes with its preview text).
+function placeSide() {
+  const room = innerHeight - document.querySelector(".savebar").offsetHeight;
+  document.documentElement.style.setProperty("--side-top", `${Math.min(0, room - document.querySelector(".side").offsetHeight)}px`);
+}
+const sizes = new ResizeObserver(placeSide);
+sizes.observe(document.querySelector(".savebar"));
+sizes.observe(document.querySelector(".side"));
+addEventListener("resize", placeSide);
 $("clearfilters").onclick = () => { filter.categories.clear(); filter.blocked = filter.ads = false; render(); };
 // The column is always open beside the list; on a phone it folds into one line above it.
 const wide = matchMedia("(min-width: 761px)");
@@ -586,7 +593,10 @@ $("save").onclick = async () => {
 
 addEventListener("beforeunload", (e) => { if (view && unsaved()) e.preventDefault(); });
 
-api("/allowlist").then(show).catch((err) => ($("message").textContent = err.message));
+api("/allowlist").then(show).catch((err) => {
+  if (/plugin not running/.test(err.message)) showNotReady(); // installed but not set up, or the router is unreachable
+  else $("message").textContent = err.message;
+});
 </script>
 </body>
 </html>

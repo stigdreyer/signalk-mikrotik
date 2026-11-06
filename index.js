@@ -1,4 +1,5 @@
 const { createClient } = require("./lib/routeros");
+const setup = require("./lib/setup");
 const { join } = require("node:path");
 const { isIP } = require("node:net");
 const router = require("./lib/router");
@@ -17,14 +18,17 @@ const SAMPLE_MS = 60_000;
 const FLOW_WAIT_MS = 3 * 60_000; // how long a flow waits for its DNS answer to show up in the cache
 const ADDRESS_KEEP_MS = 24 * 3_600_000; // connections outlive the DNS answer that started them
 const MAX_PENDING = 20_000;
+const RETRY_MS = 60_000; // a router that boots after Signal K, or is briefly unreachable, is tried again
+const INTERNET_GRACE_MS = 2 * 60_000; // how long signalk-internet may take to publish its first state
 
 const schema = {
   type: "object",
+  description: "Easiest: open the MikroTik Data Meter app and follow Setup. It prepares the router and fills in these settings for you.",
   required: ["url", "username", "password"],
   properties: {
-    url: { type: "string", title: "Router REST URL", default: "https://192.168.88.1" },
-    username: { type: "string", title: "Router user", default: "signalk" },
-    password: { type: "string", title: "Router password", default: "" },
+    url: { type: "string", title: "Router REST URL", description: "The router's address, e.g. https://192.168.88.1.", default: "https://192.168.88.1" },
+    username: { type: "string", title: "Router user", description: "A router user only for this plugin (the Setup script creates it).", default: "signalk" },
+    password: { type: "string", title: "Router password", description: "Until it's set, the plugin waits and changes nothing on the router.", default: "" },
     allowSelfSigned: { type: "boolean", title: "Accept self-signed router certificate", default: true },
     wanList: { type: "string", title: "WAN interface list", default: "WAN" },
     redirectDns: {
@@ -110,6 +114,10 @@ module.exports = (app) => {
   let timer = null;
   let stopFlows = null;
   let queue = Promise.resolve();
+  let current = null; // the options of the last start, for the Setup page
+  let lastError = null; // the last start failure, in plain words
+  let retryTimer = null;
+  let startedAt = 0;
 
   // Serialise router work so quick state changes can't interleave on the router.
   const run = (fn) =>
@@ -130,6 +138,10 @@ module.exports = (app) => {
   async function sample() {
     await sampleUsage();
     await sampleSeen();
+    // Without signalk-internet nothing ever switches the router: say so where the crew looks.
+    if (ctx && !app.getSelfPath("network.internet.state") && Date.now() - startedAt > INTERNET_GRACE_MS) {
+      app.setPluginStatus(`Router profile: ${ctx.profile}. signalk-internet isn't reporting the connection, so the router never switches: install "Internet Connectivity Monitor".`);
+    }
   }
 
   async function sampleSeen() {
@@ -273,40 +285,67 @@ module.exports = (app) => {
     };
   }
 
+  /** Check the router, put the plugin's entries on it (inactive until metered) and start metering. Throws on failure. */
+  async function install(cfg, client) {
+    const check = await router.preflight(client, cfg);
+    for (const w of check.warnings) app.debug(w);
+    if (check.errors.length) throw new Error(check.errors.join("; "));
+    // Keep whatever profile the router has until signalk-internet says otherwise.
+    const profile = (await router.currentProfile(client)) || "normal";
+    const allow = readJson(dataFile("allowlist.json"), { services: [], domains: [] });
+    const { warnings } = await router.install(client, cfg, targetsFor(cfg, allow), profile, check.ipv6, check.upstream);
+    for (const w of warnings) app.debug(w);
+    ctx = {
+      client, cfg, allow, ipv6: check.ipv6, upstream: check.upstream,
+      usage: usage.load(usageFile()), seen: readJson(dataFile("seen.json"), {}),
+      addresses: new Map(), pending: [], unmatched: readJson(dataFile("unmatched.json"), {}),
+      reset: readJson(dataFile("reset.json"), { at: 0, unmatched: [0, 0] }), // at 0: never reset
+    };
+    if (cfg.flowPort > 0) stopFlows = flows.listen(cfg.flowPort, onFlows, (err) => app.debug(`Traffic Flow: ${err.message}`));
+    publish(profile);
+    await sample();
+    timer = setInterval(() => run(sample), SAMPLE_MS);
+    timer.unref?.();
+    unsubscribe = app.streambundle.getSelfStream("network.internet.state").onValue(onState);
+  }
+
   const plugin = {
     id: PLUGIN_ID,
-    name: "MikroTik metered firewall",
-    description: "Locks a MikroTik router down to an allowlist while signalk-internet reports a metered connection.",
+    name: "MikroTik Data Meter",
+    description: "Meters the boat's data and, while signalk-internet reports a metered connection, locks a MikroTik router down to an allowlist.",
     schema,
 
     start(options) {
       const cfg = { ...DEFAULTS, ...options };
+      current = cfg;
+      lastError = null;
+      startedAt = Date.now();
+      // Installed but not set up yet: no router calls, just point the way. The Setup page works without a start.
+      if (!setup.isSetUp(cfg)) {
+        app.setPluginStatus(setup.NOT_SET_UP);
+        return Promise.resolve();
+      }
       const client = createClient(cfg);
       return run(async () => {
-        const check = await router.preflight(client, cfg);
-        for (const w of check.warnings) app.debug(w);
-        if (check.errors.length) throw new Error(check.errors.join("; "));
-        // Keep whatever profile the router has until signalk-internet says otherwise.
-        const profile = (await router.currentProfile(client)) || "normal";
-        const allow = readJson(dataFile("allowlist.json"), { services: [], domains: [] });
-        const { warnings } = await router.install(client, cfg, targetsFor(cfg, allow), profile, check.ipv6, check.upstream);
-        for (const w of warnings) app.debug(w);
-        ctx = {
-          client, cfg, allow, ipv6: check.ipv6, upstream: check.upstream,
-          usage: usage.load(usageFile()), seen: readJson(dataFile("seen.json"), {}),
-          addresses: new Map(), pending: [], unmatched: readJson(dataFile("unmatched.json"), {}),
-          reset: readJson(dataFile("reset.json"), { at: 0, unmatched: [0, 0] }), // at 0: never reset
-        };
-        if (cfg.flowPort > 0) stopFlows = flows.listen(cfg.flowPort, onFlows, (err) => app.debug(`Traffic Flow: ${err.message}`));
-        publish(profile);
-        await sample();
-        timer = setInterval(() => run(sample), SAMPLE_MS);
-        timer.unref?.();
-        unsubscribe = app.streambundle.getSelfStream("network.internet.state").onValue(onState);
+        try {
+          await install(cfg, client);
+        } catch (err) {
+          client.close();
+          lastError = setup.explain(err, cfg.url);
+          app.setPluginError(`${lastError} Trying again every minute.`);
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            if (!ctx && current === cfg) plugin.start(options);
+          }, RETRY_MS);
+          retryTimer.unref?.();
+        }
       }).then(() => ctx && onState(app.getSelfPath("network.internet.state")?.value)); // outside run(): queueing from inside it would deadlock
     },
 
     stop() {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+      current = null;
       unsubscribe?.();
       unsubscribe = null;
       clearInterval(timer);
@@ -318,7 +357,34 @@ module.exports = (app) => {
     },
 
     registerWithRouter(r) {
+      // Setup works whether or not the plugin runs, and never writes to the router.
+      r.get("/setup", (req, res) => {
+        const cfg = current ?? DEFAULTS;
+        const keep = ["url", "username", "allowSelfSigned", "wanList", "billingDay", "pricePerGb", "currency", "flowPort"];
+        res.json({
+          setUp: setup.isSetUp(current),
+          running: Boolean(ctx),
+          profile: ctx?.profile ?? null,
+          error: lastError,
+          internet: app.getSelfPath("network.internet.state")?.value ?? null,
+          addresses: setup.serverAddresses(),
+          config: Object.fromEntries(keep.map((k) => [k, cfg[k]])),
+          hasPassword: Boolean(current?.password),
+        });
+      });
+      r.post("/setup/test", (req, res) => {
+        const body = req.body ?? {};
+        if (!/^https?:\/\/[^\s/]+\/?$/.test(body.url ?? "")) return res.status(400).json({ error: "The router address should look like https://192.168.88.1." });
+        // An empty password means "the one already saved".
+        const cfg = { ...DEFAULTS, ...current, ...body, password: body.password || current?.password || "" };
+        const client = createClient(cfg);
+        router.preflight(client, cfg).then(
+          (check) => res.json({ ok: check.errors.length === 0, ...check }),
+          (err) => res.json({ ok: false, errors: [setup.explain(err, cfg.url)], warnings: [] }),
+        ).finally(() => client.close());
+      });
       r.get("/preflight", (req, res) => {
+
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         router.preflight(ctx.client, ctx.cfg).then(
           (check) => res.json(check),

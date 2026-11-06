@@ -3,6 +3,12 @@
 These steps prepare a MikroTik router for signalk-mikrotik. Run them in the
 RouterOS terminal (WinBox → New Terminal, or SSH).
 
+**Shortcut:** the app's **Setup** page writes one script for sections 1, 2, the
+DNS options in 4, and 5, filled in with your Signal K server's address and a new
+password, and safe to run again. This page explains each step, and the parts the
+script leaves to you: the WAN interface list (3), the DNS upstream servers and
+DHCP (4).
+
 > **Status: draft, not yet run end to end on a router.** Commands marked
 > *verify* may differ between RouterOS versions. Please report what worked on
 > yours.
@@ -169,7 +175,7 @@ To turn it off again:
 
 ## 6. Plugin config
 
-In Signal K → Server → Plugin Config → **MikroTik metered firewall**:
+In Signal K → Server → Plugin Config → **MikroTik Data Meter**:
 
 | Setting | Value |
 |---|---|

@@ -306,7 +306,8 @@ async function load() {
     $("message").textContent = "";
     render();
   } catch (err) {
-    $("message").textContent = err.message;
+    if (/plugin not running/.test(err.message)) showNotReady(); // installed but not set up, or the router is unreachable
+    else $("message").textContent = err.message;
   }
 }
 

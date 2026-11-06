@@ -41,7 +41,7 @@ Enforcement happens at the boat's own router and follows the boat's own internet
 
 ## Brand Commitments
 
-- App name in Signal K: "MikroTik Data Meter" (header: "MikroTik Data Meter · for Signal K"); the focus is data metering, MikroTik is the context. Package: `signalk-mikrotik`. Plugin settings name: "MikroTik metered firewall".
+- App name in Signal K: "MikroTik Data Meter" (header: "MikroTik Data Meter · for Signal K"); the focus is data metering, MikroTik is the context. Package and plugin id: `signalk-mikrotik`; the plugin settings carry the same name.
 - Logo: the Valve, a through-hull valve turned part-way open (brand/README.md).
 - Licence EUPL-1.2; v2fly/domain-list-community data under MIT, credited on the Allowlist page.
 

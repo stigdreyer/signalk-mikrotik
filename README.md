@@ -27,6 +27,25 @@ The plugin also shows which services and domains your devices look up, and
 what got blocked while metered, so you build the allowlist from what your crew
 actually uses rather than guessing domains.
 
+## Getting started
+
+1. Install **MikroTik Data Meter** from the Signal K Appstore and restart Signal K.
+   It brings [signalk-internet](https://github.com/meri-imperiumi/signalk-internet)
+   (Internet Connectivity Monitor) with it, which tells it when the connection is metered.
+2. Open **MikroTik Data Meter** under Webapps. Until it's connected to a router,
+   both pages point to **Setup**.
+3. Follow Setup's four steps:
+   - check that signalk-internet reports the connection;
+   - copy the generated script into the router's terminal (it turns on the REST API,
+     creates a user for the plugin and sets the router's DNS options and Traffic Flow);
+   - test the connection, which changes nothing on the router;
+   - set your billing day and price, then **Save and start**.
+
+Until the router password is set, the plugin waits and changes nothing on the router.
+If the router can't be reached, the plugin status says why in plain words and it
+tries again every minute. [docs/router-setup.md](docs/router-setup.md) explains each
+router step in detail.
+
 ## How it fits together
 
 ```
