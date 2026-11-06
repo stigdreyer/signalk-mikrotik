@@ -9,9 +9,8 @@ password, and safe to run again. This page explains each step, and the parts the
 script leaves to you: the WAN interface list (3), the DNS upstream servers and
 DHCP (4).
 
-> **Status: draft, not yet run end to end on a router.** Commands marked
-> *verify* may differ between RouterOS versions. Please report what worked on
-> yours.
+> Tested on RouterOS 7.25 (hAP ax S). Commands may differ on other versions:
+> please report what worked on yours in an issue.
 
 Before you start, take a backup:
 
@@ -42,7 +41,7 @@ Limit the service to your LAN. Replace the subnet with yours:
 /ip service set www-ssl address=192.168.88.0/24
 ```
 
-In the plugin config, keep **Accept self-signed router certificate** on.
+In Setup, step 3, keep **Accept the router's self-signed certificate** on (it is by default).
 
 ## 2. A dedicated user for the plugin
 
@@ -98,8 +97,8 @@ devices:
 /ip dns print
 ```
 
-**Upstream servers.** Set fixed IPv4 servers. On the pilot (RouterOS 7.25,
-Starlink), the dynamic IPv6 upstream returned SERVFAIL for large answers:
+**Upstream servers.** Set fixed IPv4 servers. On RouterOS 7.25 with Starlink,
+the dynamic IPv6 upstream returned SERVFAIL for large answers:
 
 ```routeros
 /ip dns set servers=1.1.1.1,1.0.0.1
@@ -115,21 +114,21 @@ default `0s` a running download or call drops once its IP expires:
 /ip dns set address-list-extra-time=1d
 ```
 
-**DHCP.** In normal mode your devices can keep any DNS server. Handing out a
-public resolver first keeps strict clients happy (see below), and the redirect
-takes over while metered:
+**DHCP.** Hand out the router as the DNS server, so the Allowlist page sees every
+device's lookups in normal mode too (the plugin warns otherwise). While metered
+the redirect sends every lookup to the router anyway:
 
 ```routeros
-/ip dhcp-server network set [find] dns-server=1.1.1.1,<router-lan-ip>
+/ip dhcp-server network set [find] dns-server=<router-lan-ip>
 ```
 
-Devices pick up DHCP changes when they renew their lease. Containers using host
-networking need a restart.
+Devices pick up DHCP changes when they renew their lease; devices with long
+leases or containers may need a restart.
 
 **SRV answers.** RouterOS compresses the target name in SRV answers, which RFC
-2782 forbids. Most resolvers accept it, but strict ones (c-ares 1.34.8, as used
-by Music Assistant's radio search) reject the reply as misformatted. While
-metered, such lookups fail. To check from a Mac or Linux machine:
+2782 forbids. Most resolvers accept it, but strict ones (c-ares 1.34.8, used by some
+Node.js and Python clients) reject the reply as misformatted, so such lookups
+through the router fail. c-ares 1.34.9 accepts them. To check from a Mac or Linux machine:
 
 ```sh
 dig @<router-ip> SRV _api._tcp.radio-browser.info
@@ -162,7 +161,7 @@ The port must match **Traffic Flow port** in the plugin config (default
 it.
 
 Check after a day that the volumes add up: the sum on the Allowlist page
-should be close to the day's total on the Usage page. Traffic to addresses no
+should be close to the Data usage total for the same 14 days. Traffic to addresses no
 DNS lookup explains (hard-coded IPs, DNS over HTTPS) is shown as one extra
 line.
 
@@ -175,16 +174,15 @@ To turn it off again:
 
 ## 6. Plugin config
 
-In Signal K → Server → Plugin Config → **MikroTik Data Meter**:
-
-| Setting | Value |
-|---|---|
-| Router REST URL | `https://<router-ip>` |
-| Router user / password | from step 2 |
-| WAN interface list | from step 3 |
+Setup, steps 3 and 4, fill in the router URL, user, password, billing day and
+price, and **Save and start** saves and enables the plugin. Only the WAN
+interface list, the DNS redirect, the Starlink preset and dish subnet, and the
+Traffic Flow port are set under Signal K → Server → Plugin Config →
+**MikroTik Data Meter**.
 
 On start the plugin checks the router and reports any problem in its status
-line. You can run the check again any time:
+line; Setup's **Test connection** and the Data usage page show the same checks.
+Over REST:
 
 ```sh
 curl -b <signalk-session-cookie> http://<signalk>/plugins/signalk-mikrotik/preflight
@@ -192,16 +190,17 @@ curl -b <signalk-session-cookie> http://<signalk>/plugins/signalk-mikrotik/prefl
 
 ## Undo
 
-`POST /plugins/signalk-mikrotik/remove` (admin) deletes everything the plugin
-created. Everything it creates carries the comment `signalk-mikrotik`, so you
-can also check by hand:
+Set signalk-internet to **Online** first: stopping or uninstalling the plugin
+leaves the router in its current profile. Then `POST /plugins/signalk-mikrotik/remove`
+(admin) deletes everything the plugin created. Everything it creates carries the
+comment `signalk-mikrotik`, so you can also remove it by hand:
 
 ```routeros
-/ip firewall filter print where comment=signalk-mikrotik
-/ip firewall nat print where comment=signalk-mikrotik
-/ip firewall address-list print where comment=signalk-mikrotik
-/ip dns static print where comment=signalk-mikrotik
-/ipv6 firewall filter print where comment=signalk-mikrotik
+/ip firewall filter remove [find comment=signalk-mikrotik]
+/ip firewall nat remove [find comment=signalk-mikrotik]
+/ipv6 firewall filter remove [find comment=signalk-mikrotik]
+/ip dns static remove [find comment=signalk-mikrotik]
+/ip firewall address-list remove [find comment=signalk-mikrotik and dynamic=no]
 ```
 
 Removal leaves the IPs that `FWD` entries added on the `skm-metered` list. No

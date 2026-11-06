@@ -6,6 +6,10 @@
   "license": "EUPL-1.2",
   "author": "Stig Dreyer",
   "repository": "github:stigdreyer/signalk-mikrotik",
+  "homepage": "https://github.com/stigdreyer/signalk-mikrotik#readme",
+  "bugs": {
+    "url": "https://github.com/stigdreyer/signalk-mikrotik/issues"
+  },
   "keywords": [
     "signalk-node-server-plugin",
     "signalk-category-utility",
@@ -28,7 +32,8 @@
     "profiles",
     "data",
     "public",
-    "docs"
+    "docs",
+    "CHANGELOG.md"
   ],
   "signalk": {
     "displayName": "MikroTik Data Meter",

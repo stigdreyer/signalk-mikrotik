@@ -137,7 +137,7 @@ and brings the webapp with it.
   - **Counter reset** (router reboot, `reset-counters`): a reading lower than
     the last one counts from zero. The bytes between the last reading and the
     reset are lost.
-  - **Plugin or HALPI2 down:** the router keeps counting, and the gap is
+  - **Plugin or Signal K server down:** the router keeps counting, and the gap is
     booked to the day and profile of the first reading after restart.
 - **Days in UTC**, like Starlink, so our days line up with theirs.
 - **Storage:** one small JSON file in the plugin data directory, one entry per
@@ -149,7 +149,7 @@ and brings the webapp with it.
 
   These let KIP, Home Assistant or a history plugin (QuestDB, Grafana) use the
   same data.
-- **Config:** price per metered GB and currency (e.g. `4.39` `FJD`), for the
+- **Config:** price per metered GB and currency (e.g. `6.00` `USD`), for the
   cost estimate. GB means 10⁹ bytes, like Starlink's.
 - **Webapp, first page** (`public/`, plain web components like
   signalk-internet):

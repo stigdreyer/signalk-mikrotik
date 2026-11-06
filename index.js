@@ -48,7 +48,7 @@ const schema = {
     pricePerGb: {
       type: "number",
       title: "Price per metered GB",
-      description: "For the cost estimate on the usage dashboard. GB means 10^9 bytes, like Starlink's. 0 hides the estimate.",
+      description: "For the cost estimate in the Allowlist's save preview. GB means 10^9 bytes, like Starlink's. 0 hides the estimate.",
       default: 0,
     },
     currency: { type: "string", title: "Currency", default: "USD" },
@@ -357,8 +357,14 @@ module.exports = (app) => {
     },
 
     registerWithRouter(r) {
-      // Setup works whether or not the plugin runs, and never writes to the router.
-      r.get("/setup", (req, res) => {
+      // Signal K 2.31+ lets only admins reach plugin routes unless they're declared: logged-in crew may read the
+      // pages (readonly) and save the allowlist (readwrite); testing a router login and removal stay admin-only.
+      // Older servers have no access(): every route then stays as it was.
+      const ro = r.access ? r.access("readonly") : r;
+      const rw = r.access ? r.access("readwrite") : r;
+      // Setup works whether or not the plugin runs, and never writes to the router. No password in it, so every
+      // page may ask it where the app should open.
+      ro.get("/setup", (req, res) => {
         const cfg = current ?? DEFAULTS;
         const keep = ["url", "username", "allowSelfSigned", "wanList", "billingDay", "pricePerGb", "currency", "flowPort"];
         res.json({
@@ -383,7 +389,7 @@ module.exports = (app) => {
           (err) => res.json({ ok: false, errors: [setup.explain(err, cfg.url)], warnings: [] }),
         ).finally(() => client.close());
       });
-      r.get("/preflight", (req, res) => {
+      ro.get("/preflight", (req, res) => {
 
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         router.preflight(ctx.client, ctx.cfg).then(
@@ -391,7 +397,7 @@ module.exports = (app) => {
           (err) => res.status(502).json({ error: err.message }),
         );
       });
-      r.get("/usage", (req, res) => {
+      ro.get("/usage", (req, res) => {
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         const { from = "", to = "9999" } = req.query;
         const pick = (buckets) => Object.fromEntries(Object.entries(buckets).filter(([k]) => k.slice(0, 10) >= from && k.slice(0, 10) <= to));
@@ -399,7 +405,7 @@ module.exports = (app) => {
         res.json({ profile: ctx.profile, pricePerGb: ctx.cfg.pricePerGb, currency: ctx.cfg.currency, billingDay: ctx.cfg.billingDay, first, days: pick(ctx.usage.days), hours: pick(ctx.usage.hours) });
       });
       // Search the whole v2fly catalog, for services nobody on board has used yet.
-      r.get("/catalog", (req, res) => {
+      ro.get("/catalog", (req, res) => {
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         const q = String(req.query.q ?? "").toLowerCase().trim();
         if (q.length < 2) return res.json({ services: [] });
@@ -409,11 +415,11 @@ module.exports = (app) => {
         ids.sort((a, b) => (a.startsWith(q) ? 0 : 1) - (b.startsWith(q) ? 0 : 1) || size(b) - size(a));
         res.json({ services: ids.slice(0, 30).map((id) => serviceView(id)) });
       });
-      r.get("/allowlist", (req, res) => {
+      ro.get("/allowlist", (req, res) => {
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         res.json(allowlistView());
       });
-      r.post("/allowlist", (req, res) => {
+      rw.post("/allowlist", (req, res) => {
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         const { services, domains } = req.body ?? {};
         const bad = [
@@ -432,7 +438,7 @@ module.exports = (app) => {
           res.json({ ...allowlistView(), sync });
         }).then(() => res.headersSent || res.status(502).json({ error: "saving failed, see plugin status" }));
       });
-      r.post("/reset", (req, res) => {
+      rw.post("/reset", (req, res) => {
         if (!ctx) return res.status(503).json({ error: "plugin not running" });
         run(() => {
           seen.resetSince(ctx.seen);

@@ -1,6 +1,6 @@
 {
   "name": "Base",
-  "description": "Always allowed while metered: time sync and the signalk-internet connectivity probes. For crew safety comms, enable the messaging profile.",
+  "description": "Always allowed while metered: time sync and the signalk-internet connectivity probes. Pick the crew's messaging apps on the Allowlist page for safety comms.",
   "hosts": [
     "pool.ntp.org",
     "time.google.com",
