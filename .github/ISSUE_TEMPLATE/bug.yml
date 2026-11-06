@@ -6,7 +6,7 @@ body:
     attributes:
       label: Plugin version
       description: Signal K → Appstore → Installed, or the plugin's settings page.
-      placeholder: "0.8.1"
+      placeholder: "1.0.0"
     validations:
       required: true
   - type: input
