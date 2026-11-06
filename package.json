@@ -1,6 +1,6 @@
 {
   "name": "signalk-mikrotik",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Signal K plugin that locks a MikroTik router down to an allowlist while the internet connection is metered, and shows data usage",
   "main": "index.js",
   "license": "EUPL-1.2",
@@ -32,7 +32,13 @@
   ],
   "signalk": {
     "displayName": "MikroTik Data Meter",
-    "appIcon": "./assets/icons/icon-72x72.png"
+    "appIcon": "./assets/icons/icon-72x72.png",
+    "screenshots": [
+      "./docs/screenshots/allowlist.png",
+      "./docs/screenshots/data-usage.png",
+      "./docs/screenshots/night.png",
+      "./docs/screenshots/setup.png"
+    ]
   },
   "dependencies": {
     "@meri-imperiumi/signalk-internet": "^0.8.0"

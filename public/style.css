@@ -31,21 +31,21 @@
   }
 }
 /* Night: red on black only, so nobody on watch loses their night vision. Body text 4.5:1 and secondary 3.5:1,
-   readable on a moving phone. With one hue, states differ by shape and weight (badges, dashed borders), not colour. */
+   on the page and on the header/fill panels too, readable on a moving phone. With one hue, states differ by shape and weight (badges, dashed borders), not colour. */
 :root[data-mode="night"] {
   color-scheme: dark;
   --surface: #000000;
-  --panel: #140000;
-  --text: #e02a2a;
-  --text-2: #c02020;
+  --panel: #0a0000;
+  --text: #e42c2c;
+  --text-2: #c82424;
   --grid: #3a0909;
-  --line: #b01c1c;
+  --line: #bc1e1e;
   --normal: #b01c1c;
   --normal-bar: #b01c1c;
   --metered: #ff4a4a;
   --warn: #ff4a4a;
   --error: #ff4a4a;
-  --fill: #2a0000;
+  --fill: #160000; /* selected/primary keep a border and underline, so a near-black fill still reads */
   --brand: var(--text);
   --on-fill: var(--text);
 }
@@ -58,8 +58,8 @@ body { margin: 0; padding: 16px; background: var(--surface); color: var(--text);
 ::placeholder { color: var(--text-2); opacity: 1; }
 :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 main { max-width: 1120px; margin: 0 auto; } /* one width for every page, so the header never jumps between them */
-h1 { font-size: 1.25rem; margin: 0 0 4px; }
-h2 { font-size: 1rem; margin: 0 0 8px; }
+h1 { font-size: 1.25rem; margin: 0 0 4px; text-wrap: balance; }
+h2 { font-size: 1rem; margin: 0 0 8px; text-wrap: balance; }
 p { max-width: 56ch; text-wrap: pretty; } /* ch is a "0": 56ch holds about 75 characters of prose */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 section { margin-top: 24px; }
@@ -71,10 +71,18 @@ section { margin-top: 24px; }
 .badge.normal { border-color: var(--text-2); }
 /* Shown instead of a page when the plugin isn't running: a pointer to Setup, not an error. */
 main.is-notready > :not(.notready) { display: none; }
-.notready { max-width: 56ch; margin: 24px 0; }
-.notready h1 { margin-bottom: 8px; }
-.notready .primary { display: inline-flex; align-items: center; text-decoration: none; margin-top: 8px; }
-.textlink { color: var(--text); text-underline-offset: 3px; display: inline-block; padding: 6px 0; }
+/* A centred card, not a page: it says this isn't the page you came for, and what to do instead. */
+.notready { max-width: 30rem; margin: clamp(24px, 10vh, 96px) auto; padding: 28px 24px; text-align: center;
+  background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; }
+.notready-icon { width: 56px; height: 56px; margin: 0 auto 14px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--line); }
+.notready-icon svg { width: 28px; height: 28px; fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.notready h1 { margin-bottom: 10px; }
+.notready p { margin: 0 auto 10px; }
+.notready .why { color: var(--text-2); font-size: 0.875rem; }
+.notready .why.error { color: var(--error); }
+.notready .primary { display: inline-flex; align-items: center; text-decoration: none; margin-top: 10px; }
+.textlink { color: var(--text); text-underline-offset: 3px; display: inline-block; padding: 6px 0; } /* a link on its own line: a taller target */
+a { color: var(--text); text-underline-offset: 3px; } /* links inside a sentence stay inline, so line spacing holds */
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
 summary { cursor: pointer; padding: 6px 0; }
 button { font: inherit; color: var(--text); }
@@ -95,17 +103,20 @@ button { font: inherit; color: var(--text); }
 .badge.state { margin: 0; padding: 2px 8px; }
 .tabs { grid-column: 1 / -1; display: flex; gap: 4px; margin-bottom: -1px; }
 .tabs a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px;
-  color: var(--text-2); text-decoration: none; font-weight: 500; border-radius: 8px 8px 0 0; }
+  color: var(--text-2); text-decoration: none; font-weight: 500; border-radius: 8px 8px 0 0; white-space: nowrap; }
 .tabs a svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tabs a:hover { color: var(--text); background: var(--surface); }
 .tabs a[aria-current="page"] { color: var(--text); font-weight: 700; box-shadow: inset 0 -3px 0 var(--text); }
 @media (max-width: 600px) {
-  .tabs a { flex: 1; padding: 10px 8px; }
+  .tabs a { flex: 1; min-width: 0; padding: 10px 8px; }
 }
 @media (max-width: 420px) {
-  /* The name and the mode switch don't fit side by side on a narrow phone: the switch takes its own row. */
-  .appbar-in { grid-template-columns: 1fr; }
-  .modes { justify-self: start; }
+  /* The name and the mode switch don't fit side by side on a narrow phone: the name takes the first row, the router
+     badge and the mode switch share the second (wrapping only on the narrowest phones), the tabs the third. */
+  .appbar-in { display: flex; flex-wrap: wrap; }
+  .who { display: contents; }
+  .brand, .tabs { flex-basis: 100%; }
+  .tabs a svg { display: none; } /* labels only, so "Data usage" stays on one line */
 }
 html.routing body { visibility: hidden; } /* mode.js picks the start page; see entry() */
 .appbar:empty { min-height: 118px; } /* holds the header's room until mode.js fills it */
@@ -119,12 +130,12 @@ html.routing body { visibility: hidden; } /* mode.js picks the start page; see e
 .scroller::-webkit-scrollbar { display: none; }
 
 /* Segmented control: one setting with two or three values (sort, data period, time zone). */
-.seg { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg { display: inline-flex; flex-wrap: wrap; flex: none; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { font-size: 0.8125rem; padding: 6px 10px; min-height: 32px; border: none; background: none; color: var(--text-2); cursor: pointer; white-space: nowrap; }
 .seg button + button { border-left: 1px solid var(--line); }
 /* Selected by shape as well as fill: an underline bar, so it reads in night mode's single red too. */
 .seg button[aria-pressed="true"] { background: var(--fill); color: var(--on-fill); font-weight: 600; box-shadow: inset 0 -3px 0 var(--text); }
-.setting { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.8125rem; color: var(--text-2); white-space: nowrap; }
+.setting { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.8125rem; color: var(--text-2); }
 
 /* Checkboxes drawn from the palette, so night mode has no grey or white native box. */
 input[type="checkbox"] {
@@ -144,8 +155,13 @@ input[type="radio"]:checked::before { transform: scale(1); }
 :root[data-mode="night"] input[type="checkbox"]:checked::before { background: var(--text); }
 :root[data-mode="night"] input[type="search"]::-webkit-search-cancel-button { display: none; }
 
-.primary { padding: 8px 18px; min-height: 40px; border-radius: 8px; border: 1px solid var(--text); background: var(--fill); color: var(--on-fill); font-weight: 600; cursor: pointer; }
+.primary { padding: 8px 18px; min-height: 44px; border-radius: 8px; border: 1px solid var(--text); background: var(--fill); color: var(--on-fill); font-weight: 600; cursor: pointer; }
 .primary:disabled { background: none; color: var(--text-2); border: 1px dashed var(--text-2); font-weight: 400; cursor: default; }
+.secondary { font: inherit; min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; }
+.secondary:disabled { color: var(--text-2); border-style: dashed; cursor: default; }
+/* An action that reads as a link: underlined, but still a 44px target. */
+.linkbtn { font: inherit; font-size: 0.8125rem; background: none; border: none; color: var(--text); text-decoration: underline; text-underline-offset: 3px;
+  cursor: pointer; padding: 8px 2px; min-height: 44px; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .tile { background: var(--panel); border-radius: 8px; padding: 12px; }
@@ -153,7 +169,7 @@ input[type="radio"]:checked::before { transform: scale(1); }
 .tile .sub { font-size: 0.8125rem; }
 .tile.lead { box-shadow: inset 0 0 0 1.5px var(--metered); }
 /* A floating label for the bar under the pointer (Data usage chart, Allowlist share bar). */
-.tip { position: absolute; z-index: 2; pointer-events: none; white-space: nowrap; font-size: 0.8125rem; font-variant-numeric: tabular-nums;
+.tip { position: absolute; z-index: 2; pointer-events: none; width: max-content; max-width: 100%; /* wraps on a phone instead of running off the screen */ font-size: 0.8125rem; font-variant-numeric: tabular-nums;
   padding: 6px 10px; border-radius: 6px; background: var(--fill); color: var(--on-fill); border: 1px solid var(--text);
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); }
 .tip b { font-weight: 700; }
@@ -168,4 +184,6 @@ th:first-child, td:first-child { text-align: left; }
 
 @media (pointer: coarse) {
   .pill, .seg button { min-height: 44px; }
+  summary { padding: 12px 0; } /* 44px tall, keeping the disclosure triangle */
+  .brand { min-height: 44px; }
 }

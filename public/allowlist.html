@@ -44,7 +44,6 @@
   .opt .n { margin-left: auto; font-size: 0.8125rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .toolbar { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 12px 0 8px; border-bottom: 1px solid var(--grid); }
   input[type="search"] { font: inherit; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
-  .linkbtn { font-size: 0.8125rem; background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 2px; min-height: 44px; }
 
   .item { border-bottom: 1px solid var(--grid); transition: background 1.2s ease-out; }
   .item.flash { background: var(--panel); transition: none; }
@@ -137,7 +136,7 @@
     <div class="actions">
       <button id="save" class="primary" disabled>Save</button>
       <button id="discard" class="linkbtn" hidden>Discard changes</button>
-      <span id="status" class="muted" role="status"></span>
+      <span id="status" class="muted" role="status" tabindex="-1"></span>
       <span id="savedat" class="muted"></span>
     </div>
   </div>
@@ -260,9 +259,10 @@ function renderShare(all) {
   if (!view.flows || !sum) {
     $("sharebar").hidden = $("keys").hidden = true;
     $("sharenote").hidden = false;
-    $("sharenote").textContent = view.flows
-      ? `No data counted ${periodText()} yet.`
-      : "Data per service needs the router's Traffic Flow export. The Data usage page says how to set it up.";
+    $("sharenote").replaceChildren(...(view.flows
+      ? [`No data counted ${periodText()} yet.`]
+      : ["Data per service needs the router's Traffic Flow export: the router script in ",
+        el("a", { href: "setup.html#step2", textContent: "Setup, step 2" }), " turns it on."]));
     return;
   }
   $("sharebar").hidden = $("keys").hidden = false;
@@ -346,7 +346,7 @@ function row(it, sum) {
   const change = opensAfter(it) !== opensNow(it) && el("span", { className: opensAfter(it) ? "tag" : "tag closing", textContent: opensAfter(it) ? "will be allowed" : "will be blocked" });
   const cats = it.categories.filter(useful).slice(0, 2).map(prettyCategory);
   const sub = [
-    blockedNow(it) ? el("span", { className: "blocked", textContent: `stopped ${ago(it.seen.blocked)}` }) : null,
+    blockedNow(it) ? el("span", { className: "blocked", textContent: `blocked ${ago(it.seen.blocked)}` }) : null,
     parent ? `via ${prettyId(parent)}` : null,
     isAds(it) ? "Ads / tracking" : cats.join(", ") || (it.kind === "domains" ? "domain" : null),
     !blockedNow(it) ? (it.seen ? `seen ${ago(it.seen.last)}` : "not seen yet") : null,
@@ -395,8 +395,8 @@ function renderSide(all) {
   const toggle = more && el("button", { className: "linkbtn", id: "morecats", textContent: allCategories ? "Show fewer" : `Show all ${ranked.length}` });
   if (toggle) toggle.onclick = () => { allCategories = !allCategories; render(); };
   $("filters").replaceChildren(...[
-    // The watch job first: what tried to get out while metered and was stopped.
-    blocked && option("blocked", "Stopped lately", blocked, filter.blocked, () => { filter.blocked = !filter.blocked; render(); }),
+    // The watch job first: what tried to get out while metered and was blocked.
+    blocked && option("blocked", "Blocked lately", blocked, filter.blocked, () => { filter.blocked = !filter.blocked; render(); }),
     ads && option("ads", "Ads / tracking", ads, filter.ads, () => { filter.ads = !filter.ads; render(); }),
     shown.map(([label, n]) => option(`cat:${label}`, label, n, filter.categories.has(label), () => {
       filter.categories.has(label) ? filter.categories.delete(label) : filter.categories.add(label);
@@ -460,7 +460,7 @@ function draw() {
 /** The router's profile in the header, when it was last saved, and what Save would change. */
 function renderSummary(all) {
   setRouterProfile(view.profile);
-  $("savedat").textContent = view.savedAt ? `Router updated ${dated(view.savedAt)}` : "";
+  $("savedat").textContent = view.savedAt ? `Router updated ${dated(view.savedAt)}` : "Switch services below, then save."; // never a lone Save
   renderPending(all);
 }
 
@@ -533,7 +533,13 @@ $("search").oninput = () => {
   }, 250);
 };
 
-$("discard").onclick = () => show(view);
+// Discard, Save and Clear filters hide or disable themselves: move the keyboard on, so it doesn't fall back to the page top.
+$("discard").onclick = () => {
+  show(view);
+  $("status").className = "muted";
+  $("status").textContent = "Changes discarded.";
+  $("status").focus();
+};
 // Where the filter column sticks: at the top when it fits above the save bar, else as far up as keeps its end
 // visible above the save bar (whose height changes with its preview text).
 function placeSide() {
@@ -544,7 +550,7 @@ const sizes = new ResizeObserver(placeSide);
 sizes.observe(document.querySelector(".savebar"));
 sizes.observe(document.querySelector(".side"));
 addEventListener("resize", placeSide);
-$("clearfilters").onclick = () => { filter.categories.clear(); filter.blocked = filter.ads = false; render(); };
+$("clearfilters").onclick = () => { filter.categories.clear(); filter.blocked = filter.ads = false; render(); $("search").focus(); };
 // The column is always open beside the list; on a phone it folds into one line above it.
 const wide = matchMedia("(min-width: 761px)");
 const syncSide = () => { if (wide.matches) $("sidebox").open = true; };
@@ -583,6 +589,7 @@ $("save").onclick = async () => {
     const { added, removed, ms } = result.sync ?? {};
     $("status").className = "confirm";
     $("status").textContent = `Saved. ${outcome || "The router is updated"}.` + (result.sync ? ` (${plural(added + removed, "router entry", "router entries")} updated in ${(ms / 1000).toFixed(1)} s)` : "");
+    if ([document.body, $("save"), null].includes(document.activeElement)) $("status").focus();
   } catch (err) {
     done();
     $("status").className = "error";

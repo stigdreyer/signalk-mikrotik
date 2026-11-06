@@ -72,15 +72,26 @@
     const badge = document.getElementById("appstate");
     if (!badge || !profile) return;
     const metered = profile === "metered";
+    const text = metered ? "Router: Metered" : "Router: Normal"; // "Router:" so it isn't read as a display mode like Night
+    if (badge.textContent === text && !badge.hidden) return; // it's a live region: say it again only when it changes
     badge.hidden = false;
     badge.className = metered ? "badge state" : "badge state normal";
-    badge.textContent = metered ? "Metered" : "Normal";
+    badge.textContent = text;
     badge.title = metered ? "Metered: only the allowed services get through" : "Normal: everything gets through";
   }
   /** Pages call this with the profile from their data. */
   window.setRouterProfile = (p) => { profile = p; showProfile(); };
 
-  /** When the plugin isn't running, a page shows where to go instead of an error: Setup. */
+  /** When the plugin isn't running, a page shows a card that says so and where to go: Setup. Centred and boxed, so it
+      can't be mistaken for the page itself. */
+  const WHAT = {
+    "index.html": "Data usage shows what went over the router's internet connection, metered and normal.",
+    "allowlist.html": "The Allowlist is where you choose what gets through while the connection is metered.",
+  };
+  const ICON = {
+    setup: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4M12 7h8M4 17h9M17 17h3"/><circle cx="10" cy="7" r="2.2"/><circle cx="15" cy="17" r="2.2"/></svg>',
+    unplugged: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0z"/><path d="M12 16v5"/><path d="M4 4l16 16"/></svg>',
+  };
   window.showNotReady = async () => {
     const main = document.querySelector("main");
     if (!main || main.querySelector(".notready")) return;
@@ -88,14 +99,19 @@
     try {
       st = await (await fetch("/plugins/signalk-mikrotik/setup", { credentials: "same-origin" })).json();
     } catch {}
-    const [title, text] = st?.setUp && st.error
-      ? ["Not connected to the router", st.error]
-      : ["Not set up yet", "Connect MikroTik Data Meter to your router: it takes four short steps."];
+    const broken = Boolean(st?.setUp && st.error);
+    const page = location.pathname.split("/").pop() || "index.html";
     const panel = document.createElement("section");
     panel.className = "notready";
-    panel.innerHTML = '<h1></h1><p></p><a class="primary" href="setup.html">Open Setup</a>';
-    panel.querySelector("h1").textContent = title;
-    panel.querySelector("p").textContent = text;
+    panel.setAttribute("aria-labelledby", "notready-title");
+    panel.innerHTML = `<div class="notready-icon">${ICON[broken ? "unplugged" : "setup"]}</div><h1 id="notready-title"></h1>` +
+      '<p class="what"></p><p class="why"></p><a class="primary" href="setup.html"></a>';
+    panel.querySelector("h1").textContent = broken ? "Not connected to the router" : "Not set up yet";
+    panel.querySelector(".what").textContent = WHAT[page] ? `${WHAT[page]} It needs the plugin connected to your MikroTik router first.`
+      : "This page needs the plugin connected to your MikroTik router first.";
+    panel.querySelector(".why").textContent = broken ? st.error : "Setup connects it in four short steps, and you come back here when it's running.";
+    panel.querySelector(".why").classList.toggle("error", broken);
+    panel.querySelector("a").textContent = broken ? "Fix it in Setup" : "Open Setup";
     main.classList.add("is-notready");
     main.prepend(panel);
   };
@@ -130,5 +146,6 @@
   apply(); // before the first paint, so night doesn't flash white
   document.addEventListener("DOMContentLoaded", header);
   poll();
-  setInterval(poll, 30_000);
+  setInterval(() => document.hidden || poll(), 30_000); // a tablet left open at the chart table doesn't poll in the background
+  document.addEventListener("visibilitychange", () => document.hidden || poll());
 })();

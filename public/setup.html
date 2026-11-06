@@ -18,27 +18,30 @@
   .step-head { display: flex; align-items: center; gap: 12px; }
   .step-head h2 { margin: 0; font-size: 1rem; }
   /* Done is a filled disc with a tick, to do an empty ring: the state reads without colour. */
-  .mark { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center;
+  .step-mark { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center;
     font-size: 0.8125rem; font-weight: 700; color: var(--text-2); }
-  .mark.done { background: var(--fill); border-color: var(--text); color: var(--on-fill); }
-  .mark svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .step-mark.done { background: var(--fill); border-color: var(--text); color: var(--on-fill); }
+  .step-mark svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
   .step-body { margin: 8px 0 0 38px; }
   .step-body p { margin: 6px 0; }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 16px; margin: 12px 0; }
-  .field { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--text-2); }
+  .field { display: grid; gap: 4px; align-content: start; font-size: 0.8125rem; color: var(--text-2); } /* a hint under one field mustn't stretch its neighbour's input */
   .field input, .field select { font: inherit; font-size: 0.9375rem; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
     background: var(--surface); color: var(--text); width: 100%; }
   .check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
   .script { width: 100%; min-height: 220px; font: 0.8125rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px 12px; border: 1px solid var(--line);
     border-radius: 8px; background: var(--panel); color: var(--text); resize: vertical; white-space: pre; }
   .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 10px; }
-  .secondary { font: inherit; min-height: 40px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: none; cursor: pointer; }
-  .linkbtn { font-size: 0.8125rem; background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 2px; min-height: 44px; color: var(--text); }
   .result { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
   .result li { display: flex; gap: 8px; align-items: baseline; }
   .result li svg { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transform: translateY(2px); }
   .status { margin: 0 0 8px; }
   .muted.small { font-size: 0.8125rem; }
+  .field .hint { font-size: 0.8125rem; color: var(--text-2); }
+  /* The end of setup: the moment the boat is covered gets its own block, not a status line. */
+  .running { margin-top: 14px; padding: 12px 14px; border: 1.5px solid var(--text); border-radius: 8px; max-width: 56ch; }
+  .running strong { display: block; margin-bottom: 2px; }
+  .running a { color: var(--text); text-underline-offset: 3px; }
   @media (max-width: 600px) { .step-body { margin-left: 0; } }
 </style>
 </head>
@@ -51,7 +54,7 @@
 
   <ol class="steps">
     <li class="step" id="step1">
-      <div class="step-head"><span class="mark" id="mark1">1</span><h2>Internet state from signalk-internet</h2></div>
+      <div class="step-head"><span class="step-mark" id="mark1">1</span><h2>Internet state from signalk-internet</h2></div>
       <div class="step-body">
         <p>The router switches to the allowlist when <strong>signalk-internet</strong> (Internet Connectivity Monitor) says the connection is metered. It's installed together with this plugin.</p>
         <p id="internet" class="status" role="status">Checking…</p>
@@ -59,10 +62,10 @@
     </li>
 
     <li class="step" id="step2">
-      <div class="step-head"><span class="mark" id="mark2">2</span><h2>Prepare the router</h2></div>
+      <div class="step-head"><span class="step-mark" id="mark2">2</span><h2>Prepare the router</h2></div>
       <div class="step-body">
         <p>Paste this script into the MikroTik's terminal (WinBox → New Terminal, or SSH). It turns on the secure REST API, creates a user for this plugin that can only log in from this Signal K server, sets the router's DNS options and sends connection data here. It's safe to run again.</p>
-        <p id="redo" class="muted small" hidden>The router is already set up. Running a new script gives the plugin user a new password; enter it in step 3 afterwards.</p>
+        <p id="redo" class="muted small" hidden>The router is already set up. This script keeps the plugin user's password, so running it again changes nothing that works. Press New password only if you want a new one: it goes into step 3 for you.</p>
         <div class="fields">
           <label class="field">This Signal K server's address<select id="server"></select></label>
           <label class="field">Router user for the plugin<input id="username" autocomplete="off" value="signalk"></label>
@@ -77,29 +80,30 @@
     </li>
 
     <li class="step" id="step3">
-      <div class="step-head"><span class="mark" id="mark3">3</span><h2>Connect to the router</h2></div>
+      <div class="step-head"><span class="step-mark" id="mark3">3</span><h2>Connect to the router</h2></div>
       <div class="step-body">
         <div class="fields">
           <label class="field">Router address<input id="url" inputmode="url" autocomplete="off" placeholder="https://192.168.88.1"></label>
-          <label class="field">Password<input id="password" type="password" autocomplete="off"></label>
+          <label class="field">Plugin user's password<input id="password" type="password" autocomplete="off" aria-describedby="pwhint"><span class="hint" id="pwhint"></span></label>
         </div>
         <label class="check"><input type="checkbox" id="selfsigned"> Accept the router's self-signed certificate</label>
-        <div class="actions"><button class="secondary" id="test">Test connection</button><span class="muted small">Checks the router; changes nothing.</span></div>
+        <div class="actions"><button class="secondary" id="test">Test connection</button><span class="muted small">Checks the router; changes nothing. Passing it ticks steps 2 and 3.</span></div>
         <ul class="result" id="testresult" aria-live="polite"></ul>
       </div>
     </li>
 
     <li class="step" id="step4">
-      <div class="step-head"><span class="mark" id="mark4">4</span><h2>Your plan, then start</h2></div>
+      <div class="step-head"><span class="step-mark" id="mark4">4</span><h2>Your plan, then start</h2></div>
       <div class="step-body">
-        <p>Optional, for the Data usage page: when your billing cycle starts and what a metered GB costs.</p>
+        <p>Optional. The billing day lines Data usage up with your provider's bill; the price lets the Allowlist estimate what allowing a service costs.</p>
         <div class="fields">
-          <label class="field">Billing day (1–31)<input id="billingDay" type="number" min="1" max="31" inputmode="numeric"></label>
-          <label class="field">Price per metered GB<input id="price" type="number" min="0" step="0.01" inputmode="decimal"></label>
-          <label class="field">Currency<input id="currency" autocomplete="off"></label>
+          <label class="field">Day your billing cycle starts (1–31)<input id="billingDay" type="number" min="1" max="31" inputmode="numeric"></label>
+          <label class="field">Price per metered GB<input id="price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 2.00"></label>
+          <label class="field">Currency<input id="currency" autocomplete="off" maxlength="4" placeholder="e.g. USD"></label>
         </div>
         <p class="muted small">Starting puts the plugin's firewall and DNS entries on the router, all marked <code>signalk-mikrotik</code>. They stay off until the connection is metered, and the plugin can remove them again.</p>
         <div class="actions"><button class="primary" id="save">Save and start</button><span id="savestatus" role="status"></span></div>
+        <div class="running" id="done" role="status" hidden></div>
       </div>
     </li>
   </ol>
@@ -125,11 +129,11 @@ async function api(path, opts = {}) {
   return body;
 }
 
-function mark(n, done, label) {
+function mark(n, done) {
   const m = $(`mark${n}`);
-  m.className = done ? "mark done" : "mark";
-  m.innerHTML = done ? TICK : String(n);
-  m.setAttribute("aria-label", `Step ${n}: ${done ? "done" : label ?? "to do"}`);
+  m.className = done ? "step-mark done" : "step-mark";
+  // Spoken as text: a label on a plain span isn't announced, and the tick is only a picture.
+  m.innerHTML = `${done ? TICK : `<span aria-hidden="true">${n}</span>`}<span class="sr-only">Step ${n}, ${done ? "done" : "to do"}:</span>`;
 }
 
 /** A password RouterOS takes without quoting trouble: letters and digits only. */
@@ -137,7 +141,7 @@ function newPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   return Array.from(crypto.getRandomValues(new Uint32Array(24)), (n) => chars[n % chars.length]).join("");
 }
-let password = newPassword();
+let password = newPassword(); // null once the plugin has one: the script then leaves the router password alone
 
 /** The server's LAN as a subnet, from its address and prefix (e.g. 192.168.88.10/24 → 192.168.88.0/24). */
 function subnet(cidr) {
@@ -160,7 +164,9 @@ function renderScript() {
     `/ip service set www-ssl certificate=signalk-rest disabled=no address=${lan}`,
     `:do { /ip dhcp-server lease make-static [find address=${ip}] } on-error={}`,
     `:if ([:len [/user group find name="${user}"]] = 0) do={ /user group add name=${user} policy=read,write,api,rest-api }`,
-    `:if ([:len [/user find name="${user}"]] = 0) do={ /user add name=${user} group=${user} password="${password}" address=${ip}/32 } else={ /user set [find name="${user}"] group=${user} password="${password}" address=${ip}/32 }`,
+    password
+      ? `:if ([:len [/user find name="${user}"]] = 0) do={ /user add name=${user} group=${user} password="${password}" address=${ip}/32 } else={ /user set [find name="${user}"] group=${user} password="${password}" address=${ip}/32 }`
+      : `:if ([:len [/user find name="${user}"]] = 0) do={ :error "No router user ${user}: press New password in Setup and copy the script again" } else={ /user set [find name="${user}"] group=${user} address=${ip}/32 }`,
     `/ip dns set allow-remote-requests=yes address-list-extra-time=1d`,
     ...(port > 0 ? [
       `/ip traffic-flow set enabled=yes interfaces=all active-flow-timeout=1m inactive-flow-timeout=15s`,
@@ -179,14 +185,18 @@ function renderInternet() {
 }
 
 function renderStatus() {
+  setRouterProfile(state.profile); // the header badge, as on the other pages
   if (state.running) {
     $("intro").textContent = `Running. The router is in ${state.profile} mode. You can change the settings below at any time.`;
     mark(4, true);
   } else if (state.error) {
     $("intro").replaceChildren(Object.assign(document.createElement("span"), { className: "error", textContent: `Not connected: ${state.error}` }));
   }
-  if (state.hasPassword) mark(2, true);
+  // A working connection is the proof the script ran: copying it isn't.
+  mark(2, state.running || tested);
   mark(3, state.running || tested);
+  mark(4, state.running);
+  $("save").textContent = state.running ? "Save changes" : "Save and start";
 }
 
 async function load() {
@@ -201,11 +211,15 @@ async function load() {
   $("username").value = state.config.username;
   $("selfsigned").checked = state.config.allowSelfSigned;
   $("billingDay").value = state.config.billingDay;
-  $("price").value = state.config.pricePerGb;
+  $("price").value = state.config.pricePerGb || ""; // empty shows the example, rather than a price of 0
   $("currency").value = state.config.currency;
   $("redo").hidden = !state.hasPassword;
   $("password").placeholder = state.hasPassword ? "Unchanged (saved)" : "";
-  if (!state.hasPassword) $("password").value = password;
+  if (state.hasPassword) password = null;
+  else $("password").value = password;
+  $("pwhint").textContent = state.hasPassword
+    ? "Leave empty to keep the saved one."
+    : "Filled in from the step 2 script. It's the plugin user's password, not your router admin password.";
   renderScript();
   renderInternet();
   renderStatus();
@@ -217,7 +231,8 @@ $("newpw").onclick = () => {
   password = newPassword();
   $("password").value = password;
   renderScript();
-  $("copied").textContent = "New password made. Run the script again, then test the connection.";
+  $("copied").textContent = "New password made and put into step 3. Run the script, then test and save.";
+  $("pwhint").textContent = "New password from the step 2 script. Run the script, then save, so the plugin stays connected.";
 };
 $("copy").onclick = async () => {
   try {
@@ -227,7 +242,6 @@ $("copy").onclick = async () => {
     $("script").select(); // no clipboard (plain http): select it for Cmd/Ctrl+C
     $("copied").textContent = "Selected: press Cmd+C or Ctrl+C to copy.";
   }
-  mark(2, true);
 };
 
 const connection = () => ({
@@ -237,27 +251,39 @@ const connection = () => ({
   allowSelfSigned: $("selfsigned").checked,
 });
 
-$("test").onclick = async () => {
+// Warnings the step 2 script already fixes: say so, instead of leaving only RouterOS syntax.
+const SCRIPT_FIXES = /address-list-extra-time|allow-remote-requests|Traffic Flow/;
+const SEVERITY = { ok: "Passed: ", warn: "Warning: ", error: "Error: " };
+
+/** Checks the router with what's in the form; true when the plugin could start with it. */
+async function runTest() {
   const out = $("testresult");
+  const li = (cls, text) => {
+    const item = Object.assign(document.createElement("li"), { className: cls });
+    item.innerHTML = `${ICONS[cls]}<span class="sr-only">${SEVERITY[cls]}</span>`;
+    item.append(text);
+    return item;
+  };
+  $("test").disabled = true;
   out.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Checking the router…" }));
   try {
     const r = await api("/setup/test", { method: "POST", body: JSON.stringify(connection()) });
-    const li = (cls, text) => {
-      const item = Object.assign(document.createElement("li"), { className: cls });
-      item.innerHTML = ICONS[cls];
-      item.append(text);
-      return item;
-    };
     out.replaceChildren(
       ...(r.ok ? [li("ok", `Connected: RouterOS ${r.version}.`)] : []),
       ...r.errors.map((e) => li("error", e)),
-      ...r.warnings.map((w) => li("warn", w)));
+      ...r.warnings.map((w) => li("warn", SCRIPT_FIXES.test(w) ? `${w} Running the step 2 script again sets this.` : w)));
     tested = r.ok;
-    mark(3, r.ok);
   } catch (err) {
-    out.replaceChildren(Object.assign(document.createElement("li"), { className: "error", textContent: err.message }));
+    out.replaceChildren(li("error", err.message));
+    tested = false;
+  } finally {
+    $("test").disabled = false;
   }
-};
+  mark(2, state.running || tested);
+  mark(3, state.running || tested);
+  return tested;
+}
+$("test").onclick = runTest;
 
 $("save").onclick = async () => {
   const c = connection();
@@ -267,9 +293,15 @@ $("save").onclick = async () => {
     return;
   }
   $("save").disabled = true;
+  $("done").hidden = true;
   $("savestatus").className = "muted";
-  $("savestatus").textContent = "Saving…";
   try {
+    // First setup: test before saving, so a typo shows up here and not as a plugin that won't start.
+    if (!state.running && !tested) {
+      $("savestatus").textContent = "Testing the connection first…";
+      if (!(await runTest())) throw new Error("The connection test didn't pass: see step 3.");
+    }
+    $("savestatus").textContent = "Saving…";
     // Signal K's own plugin settings: keep what's there, add the router and plan, and enable the plugin.
     const res = await fetch(`${API}/config`, { credentials: "same-origin" });
     if (res.status === 401 || res.status === 403) throw new Error("Log in to the Signal K admin UI first: saving needs an admin.");
@@ -295,10 +327,13 @@ $("save").onclick = async () => {
     }
     renderStatus();
     if (state.running) {
-      $("savestatus").className = "";
-      $("savestatus").replaceChildren(`Running. The router is in ${state.profile} mode. `,
-        Object.assign(document.createElement("a"), { href: "index.html", textContent: "See Data usage" }), " or ",
-        Object.assign(document.createElement("a"), { href: "allowlist.html", textContent: "choose what's allowed while metered" }), ".");
+      $("savestatus").textContent = "";
+      $("done").replaceChildren(
+        Object.assign(document.createElement("strong"), { textContent: `Running: the router is in ${state.profile} mode.` }),
+        "From now on it switches to the allowlist by itself whenever the connection is metered. Next: ",
+        Object.assign(document.createElement("a"), { href: "allowlist.html", textContent: "choose what gets through while metered" }), ", or ",
+        Object.assign(document.createElement("a"), { href: "index.html", textContent: "see your data usage" }), ".");
+      $("done").hidden = false;
     } else {
       $("savestatus").className = "error";
       $("savestatus").textContent = state.error ? `Saved, but not running: ${state.error}` : "Saved. Still starting: reload this page in a minute.";

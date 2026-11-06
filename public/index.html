@@ -15,9 +15,9 @@
   .cycle { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
   .cycle h1 { font-size: 1.25rem; margin: 0; text-align: center; font-variant-numeric: tabular-nums; }
   .cycle p { margin: 2px auto 0; font-size: 0.8125rem; text-align: center; }
-  .step { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }
-  .step svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .step:disabled { visibility: hidden; }
+  .cycle-step { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }
+  .cycle-step svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .cycle-step:disabled { visibility: hidden; }
   .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 8px; }
   .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin: 12px 0 4px; font-size: 0.8125rem; }
 
@@ -26,6 +26,11 @@
   .legend { display: flex; gap: 14px; font-size: 0.8125rem; color: var(--text-2); margin: 16px 0 8px; }
   .chart svg text.today { fill: var(--text); font-weight: 700; }
   .router p { margin: 4px 0; }
+  /* Night has one hue: normal days are hatched, metered stays solid, so the two read apart by shape (as on the Allowlist). */
+  .swatch.metered { background: var(--metered); }
+  .swatch.normal { background: var(--normal-bar); }
+  :root[data-mode="night"] .swatch.normal { background: repeating-linear-gradient(135deg, var(--normal-bar) 0 2px, var(--surface) 2px 4px); }
+  :root[data-mode="night"] #bars .nb { fill: url(#hatch); }
   .foot { font-size: 0.8125rem; margin-top: 20px; }
   @media (max-width: 600px) { .cycle h1 { font-size: 1.125rem; } }
 </style>
@@ -36,9 +41,9 @@
   <div id="message" class="error" role="alert"></div>
 
   <div class="cycle">
-    <button class="step" id="prev" aria-label="Previous cycle"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5L7 10l5.5 5.5"/></svg></button>
+    <button class="cycle-step" id="prev" aria-label="Previous cycle"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5L7 10l5.5 5.5"/></svg></button>
     <div><h1 id="title">…</h1><p class="muted" id="subtitle"></p></div>
-    <button class="step" id="next" aria-label="Next cycle"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4.5L13 10l-5.5 5.5"/></svg></button>
+    <button class="cycle-step" id="next" aria-label="Next cycle"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4.5L13 10l-5.5 5.5"/></svg></button>
   </div>
 
   <div class="totals" id="totals"></div>
@@ -48,8 +53,8 @@
   <p id="hint" class="muted" hidden></p>
 
   <div class="legend">
-    <span><span class="swatch" style="background: var(--metered)"></span>Metered</span>
-    <span><span class="swatch" style="background: var(--normal-bar)"></span>Normal</span>
+    <span><span class="swatch metered"></span>Metered</span>
+    <span><span class="swatch normal"></span>Normal</span>
   </div>
   <div class="chart" id="chart" tabindex="0" role="slider" aria-valuemin="1" aria-label="Data per day; arrow keys move between days">
     <svg id="bars" aria-hidden="true"></svg>
@@ -126,8 +131,9 @@ function renderZone() {
   const offset = -new Date().getTimezoneOffset() / 60;
   const name = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const options = [["local", `Local, UTC${offset >= 0 ? "+" : ""}${offset}`], ["utc", "UTC, like Starlink"]];
+  const focused = document.activeElement?.id;
   $("zone").replaceChildren(...options.map(([z, label]) => {
-    const b = el("button", { textContent: label });
+    const b = el("button", { id: `zone:${z}`, textContent: label });
     b.setAttribute("aria-pressed", z === zone);
     b.onclick = () => {
       zone = z;
@@ -138,6 +144,7 @@ function renderZone() {
     };
     return b;
   }));
+  if (focused?.startsWith("zone:")) $(focused)?.focus(); // the buttons are new: keep the keyboard where it was
   $("zonenote").textContent = zone === "utc"
     ? "Days are UTC, like Starlink's."
     : `Days are in this device's time zone (${name}). Switch to UTC to compare with Starlink's Data Usage page.`;
@@ -167,7 +174,7 @@ function renderChart() {
   const bw = Math.max(2, step - (step > 12 ? 4 : 2));
   geometry = { W, L, T, step, y };
   const now = today();
-  const parts = [];
+  const parts = ['<defs><pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="var(--normal-bar)"/></pattern></defs>'];
   for (let i = 0; i <= 4; i++) {
     const v = (max * i) / 4;
     parts.push(`<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>`);
@@ -181,7 +188,7 @@ function renderChart() {
     const nh = base - y(d.normal);
     const mh = base - y(d.metered);
     // Metered sits on top of normal with a 2px surface gap; whichever is on top gets the rounded end.
-    if (d.normal > 0) parts.push(`<path d="${topRounded(x, base - nh, bw, nh, d.metered > 0 ? 0 : 3)}" fill="var(--normal-bar)"/>`);
+    if (d.normal > 0) parts.push(`<path d="${topRounded(x, base - nh, bw, nh, d.metered > 0 ? 0 : 3)}" class="nb" fill="var(--normal-bar)"/>`);
     if (d.metered > 0) parts.push(`<path d="${topRounded(x, base - nh - (d.normal > 0 ? 2 : 0) - mh, bw, mh, 3)}" fill="var(--metered)"/>`);
     // Label the first day, every few days, and today; day 1 of a month carries the month.
     const date = dateOf(d.key).getUTCDate();
@@ -251,10 +258,14 @@ function render() {
   $("subtitle").textContent = isCurrent
     ? `${kind} · day ${days.findIndex((d) => d.key === now) + 1} of ${days.length}`
     : `${kind} · ${days.length} days`;
+  const was = document.activeElement;
   $("prev").disabled = start <= earliest;
   $("next").disabled = isCurrent;
+  // A hidden button drops the keyboard focus: hand it to the other one, or the chart.
+  if (was?.disabled) (was === $("prev") ? $("next") : $("prev")).disabled ? $("chart").focus() : (was === $("prev") ? $("next") : $("prev")).focus();
   $("hint").hidden = (data.billingDay || 1) !== 1;
-  $("hint").textContent = "Cycles follow calendar months. Set your billing day in the plugin settings to line up with Starlink's billing cycle.";
+  $("hint").replaceChildren("Cycles follow calendar months. ",
+    el("a", { href: "setup.html#step4", textContent: "Set your billing day in Setup" }), " to line up with Starlink's billing cycle.");
   $("chart").setAttribute("aria-valuemax", days.length);
 
   const metered = days.reduce((a, d) => a + d.metered, 0);
@@ -276,7 +287,7 @@ $("chart").onkeydown = (e) => {
   if (!step && e.key !== "Home" && e.key !== "End") return;
   e.preventDefault();
   const start = picked ?? Math.max(0, days.findIndex((d) => d.key === today()));
-  pick(e.key === "Home" ? 0 : e.key === "End" ? days.length - 1 : picked === null ? start : start + step);
+  pick(e.key === "Home" ? 0 : e.key === "End" ? days.length - 1 : start + step); // the first press moves too, so it's heard
 };
 $("chart").onblur = () => { picked = null; renderChart(); };
 
@@ -322,6 +333,8 @@ async function loadPreflight() {
     if (n) {
       $("router").replaceChildren(
         el("h2", { textContent: `Router needs ${n === 1 ? "a fix" : `${n} fixes`}` }),
+        el("p", {}, "The router script in ", el("a", { href: "setup.html#step2", textContent: "Setup, step 2" }),
+          " sets most of these; test the connection there afterwards."),
         ...c.errors.map((e) => line(`Error: ${e}`, "error")),
         ...c.warnings.map((w) => line(`Warning: ${w}`, "warn")));
     }
@@ -333,7 +346,8 @@ async function loadPreflight() {
 
 load();
 loadPreflight();
-setInterval(load, 60_000);
+setInterval(() => document.hidden || load(), 60_000);
+document.addEventListener("visibilitychange", () => document.hidden || (data && load()));
 addEventListener("resize", () => data && renderChart());
 </script>
 </body>

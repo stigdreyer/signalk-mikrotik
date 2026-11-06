@@ -27,6 +27,14 @@ The plugin also shows which services and domains your devices look up, and
 what got blocked while metered, so you build the allowlist from what your crew
 actually uses rather than guessing domains.
 
+![The Allowlist while metered: a share bar of what gets through and what is blocked, a filter and sort column, and a switch per service](docs/screenshots/allowlist.png)
+
+| Data usage | Night mode | Setup |
+|---|---|---|
+| ![Data usage for the billing cycle, metered and normal per day](docs/screenshots/data-usage.png) | ![Data usage in red-on-black night mode](docs/screenshots/night.png) | ![Setup: the four guided steps](docs/screenshots/setup.png) |
+
+<sub>Screenshots show sample data, not a real boat's traffic.</sub>
+
 ## Getting started
 
 1. Install **MikroTik Data Meter** from the Signal K Appstore and restart Signal K.
@@ -178,7 +186,7 @@ shows:
 - **Search** filters what was seen and also searches the whole v2fly catalog,
   so you can allow a service before anyone used it.
 - **Filter & sort** (a column beside the list; one fold-out line on a phone):
-  sort by data, name, recently seen or days seen, and filter by "Stopped lately",
+  sort by data, name, recently seen or days seen, and filter by "Blocked lately",
   ads and tracking (hidden unless you ask for them) or v2fly categories.
 - **Always allowed:** the fixed lists, for reference.
 
