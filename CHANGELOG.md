@@ -2,12 +2,16 @@
 
 What changed in each release of **MikroTik Data Meter** (`signalk-mikrotik`). The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
-Before 1.0.0, a minor version can change settings or behaviour.
+Versions before 1.0.0 were development releases; each links to its commit.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-06
+
+The first public release, on npm and in the Signal K Appstore.
+
 ### Added
-- This changelog, a security policy, CI and an automated npm release.
+- This changelog, a security policy, CI and an npm release workflow with provenance.
 
 ### Changed
 - With Signal K's security on (2.31 or later), crew who are logged in can open Data usage and the Allowlist, and
@@ -132,16 +136,17 @@ Before 1.0.0, a minor version can change settings or behaviour.
 - Switches the MikroTik firewall to an allowlist while signalk-internet reports the connection as metered, and
   back when it's online again. Only router entries marked `signalk-mikrotik` are touched.
 
-[Unreleased]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.8.1...HEAD
-[0.8.1]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.7.5...v0.8.0
-[0.7.5]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.7.4...v0.7.5
-[0.7.4]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.7.3...v0.7.4
-[0.7.3]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.7.2...v0.7.3
-[0.7.2]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.7.1...v0.7.2
-[0.7.1]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.5.0...v0.7.0
-[0.5.0]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.3.0...v0.5.0
-[0.3.0]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/stigdreyer/signalk-mikrotik/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/stigdreyer/signalk-mikrotik/releases/tag/v0.1.0
+[Unreleased]: https://github.com/stigdreyer/signalk-mikrotik/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/stigdreyer/signalk-mikrotik/releases/tag/v1.0.0
+[0.1.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/4abb632
+[0.2.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/7c4a4ca
+[0.3.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/afee3ca
+[0.5.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/775fdcc
+[0.7.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/427cf89
+[0.7.1]: https://github.com/stigdreyer/signalk-mikrotik/commit/f7f74ae
+[0.7.2]: https://github.com/stigdreyer/signalk-mikrotik/commit/478701d
+[0.7.3]: https://github.com/stigdreyer/signalk-mikrotik/commit/a65e6ea
+[0.7.4]: https://github.com/stigdreyer/signalk-mikrotik/commit/466274b
+[0.7.5]: https://github.com/stigdreyer/signalk-mikrotik/commit/f046bcd
+[0.8.0]: https://github.com/stigdreyer/signalk-mikrotik/commit/8b82476
+[0.8.1]: https://github.com/stigdreyer/signalk-mikrotik/commit/2bb14da
