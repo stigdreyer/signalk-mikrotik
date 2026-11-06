@@ -46,7 +46,10 @@ npm pack                                  # the tarball users install; check `fi
 ## Branches and releasing
 
 `main` is protected: no direct or force pushes. Every change goes through a branch and a pull request, merged once
-the Test checks (Node 20, 22, 24) pass. Never commit to `main` locally.
+the Test checks (Node 20, 22, 24) and the SignalK Plugin CI (Linux, macOS, Windows) pass. Never commit to `main`
+locally. The plugin registry scores the published package: it clones the source at the release commit (so
+`repository` in package.json must be a full `github.com` URL) and deducts 10 points unless that commit has a passing
+SignalK Plugin CI run.
 
 ```sh
 git switch -c <topic> && git push -u origin <topic> && gh pr create --fill
