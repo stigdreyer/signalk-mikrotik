@@ -7,12 +7,14 @@ report the results (router model, RouterOS version, what failed) as an issue.
 ## Before
 
 1. Take a backup: `/export file=before-signalk-mikrotik`.
-2. Work through [router-setup.md](router-setup.md), steps 1–3.
-3. Note the router's version: `/system resource print`.
-4. Install the plugin (from the appstore, or from a tarball:
+2. Note the router's version: `/system resource print`.
+3. Install the plugin (from the Appstore, or from a tarball:
    `npm install ./signalk-mikrotik-<version>.tgz` in the Signal K config
    directory, then restart Signal K).
-5. Configure it (router URL, user, password, WAN list) and enable it.
+4. Follow the app's **Setup** tab: its script does
+   [router-setup.md](router-setup.md) sections 1, 2, 4 and 5 in one go. Set the
+   WAN interface list in the plugin settings only if yours isn't called `WAN`.
+   **Save and start** enables the plugin.
 
 ## 1. Install
 
@@ -42,8 +44,9 @@ In Freeboard → Internet, set the override to **Metered**.
 - [ ] The Starlink app opens and shows Data Usage.
 - [ ] Signal K still shows Starlink status (dish reachable).
 - [ ] WinBox/SSH to the router still work.
-- [ ] Note which apps you expected to work and didn't. They are candidates
-      for profiles.
+- [ ] Apps you expected to work and didn't appear under **Blocked lately** on
+      the Allowlist. Allow them, save (which flushes the router's DNS cache)
+      and retry.
 
 ## 3. Things that must not change the profile
 
@@ -60,8 +63,8 @@ Set the override to **Online** (or **Auto** when the link is unmetered).
 
 ## 5. Removal
 
-`curl -X POST` (as admin) to `/plugins/signalk-mikrotik/remove`, or disable
-the plugin and run the `print where comment=signalk-mikrotik` commands from
+Set the override to **Online**, then `curl -X POST` (as admin) to
+`/plugins/signalk-mikrotik/remove`, or run the `remove` commands from
 [router-setup.md](router-setup.md#undo).
 
 - [ ] Nothing tagged `signalk-mikrotik` is left, except dynamic

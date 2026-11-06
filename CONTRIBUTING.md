@@ -27,7 +27,8 @@ then look at what it resolved:
 /ip dns cache print where name~"example"
 ```
 
-Then go metered, tick your profile, and check that the app works.
+Then go metered, switch the service on in the Allowlist, and check that the
+app works. If v2fly lacks one of its domains, please fix it there.
 
 ## Tests
 
@@ -35,4 +36,26 @@ Then go metered, tick your profile, and check that the app works.
 npm test
 ```
 
-`test/profiles.test.js` checks the profile files. A PR has to pass it.
+`npm test` runs every test in `test/` on Node 20 or later, with no
+dependencies: the router is `test/fake-routeros.js`. A PR has to pass them, and
+new logic should come with a test.
+
+## Trying a change on a boat
+
+```sh
+npm pack
+```
+
+Copy the tarball to the Signal K server, run
+`npm install ./signalk-mikrotik-<version>.tgz` in its config directory
+(usually `~/.signalk`), restart Signal K, and work through
+[docs/testing.md](docs/testing.md).
+
+## Pull requests
+
+`main` only changes through pull requests, merged when the tests pass on Node 20, 22 and 24.
+
+- Add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) for anything
+  a user would notice.
+- Bug reports: the router model, the RouterOS version and the plugin status line
+  or Setup's connection test results.

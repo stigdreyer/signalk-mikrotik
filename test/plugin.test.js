@@ -323,3 +323,15 @@ test("an unreachable router is explained in plain words and retried", async (t) 
   assert.equal(body.running, false);
   assert.match(body.error, /Nothing answers/);
 });
+
+test("crew reach the pages and the save, admins alone test logins and remove (Signal K 2.31+ route access)", () => {
+  const plugin = createPlugin(fakeApp());
+  const level = {};
+  const record = (lvl) => ({ get: (p) => (level[`GET ${p}`] = lvl), post: (p) => (level[`POST ${p}`] = lvl) });
+  plugin.registerWithRouter({ ...record("admin"), access: record });
+  assert.deepEqual(level, {
+    "GET /setup": "readonly", "POST /setup/test": "admin", "GET /preflight": "readonly", "GET /usage": "readonly",
+    "GET /catalog": "readonly", "GET /allowlist": "readonly", "POST /allowlist": "readwrite", "POST /reset": "readwrite",
+    "POST /remove": "admin",
+  });
+});

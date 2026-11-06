@@ -1,6 +1,6 @@
 {
   "name": "Starlink",
-  "description": "Starlink app cloud (account, subscription, data usage). The dish subnet comes from the plugin config. Unverified: capture the app's real hosts with the traffic monitor.",
+  "description": "Starlink app cloud (account, subscription, data usage). The dish subnet comes from the plugin config. Tested on RouterOS 7.25: the Starlink app opens and shows Data Usage while metered.",
   "hosts": [
     "starlink.com",
     "api.starlink.com"

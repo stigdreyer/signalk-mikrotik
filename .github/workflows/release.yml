@@ -1,0 +1,44 @@
+name: Release
+
+# Push a tag v<x.y.z> (made by `npm version`) to publish that version to npm and create the GitHub Release.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write # the GitHub Release
+  id-token: write # npm trusted publishing and provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # npm 11: trusted publishing
+          registry-url: https://registry.npmjs.org
+      - name: The tag matches package.json
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - name: The changelog has this version
+        run: grep -q "^## \[$(node -p 'require("./package.json").version')\]" CHANGELOG.md
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      # Trusted publishing (npmjs.com, stage only): no token. The version is staged with provenance and goes live
+      # only when a maintainer approves it on npmjs.com with 2FA. Skipped when the version is already on npm
+      # (the first release was published by hand).
+      - name: Stage on npm
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          if npm view "signalk-mikrotik@$VERSION" version >/dev/null 2>&1; then
+            echo "signalk-mikrotik@$VERSION is already on npm: nothing to stage."
+          else
+            npm stage publish --access public --provenance
+            echo "Staged. Approve it on npmjs.com (signalk-mikrotik → Staged) to publish it." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

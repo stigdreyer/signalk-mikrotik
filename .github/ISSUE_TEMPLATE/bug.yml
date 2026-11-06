@@ -1,0 +1,38 @@
+name: Something doesn't work
+description: A problem with the plugin, the pages or the router setup.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: Signal K → Appstore → Installed, or the plugin's settings page.
+      placeholder: "0.8.1"
+    validations:
+      required: true
+  - type: input
+    id: router
+    attributes:
+      label: Router model and RouterOS version
+      description: "On the router: /system resource print"
+      placeholder: "hAP ax S, RouterOS 7.25"
+    validations:
+      required: true
+  - type: input
+    id: signalk
+    attributes:
+      label: Signal K server version
+      placeholder: "2.36.0"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the plugin status line, and the Setup page's connection test results if they show a problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: markdown
+    attributes:
+      value: Please leave out passwords, public IP addresses and anything else you don't want public.

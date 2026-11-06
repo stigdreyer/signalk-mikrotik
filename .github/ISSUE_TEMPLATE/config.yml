@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A service is missing or incomplete on the Allowlist
+    url: https://github.com/v2fly/domain-list-community
+    about: Services and categories come from v2fly/domain-list-community. Fixing it there helps every project using the list.
+  - name: Report a security problem
+    url: https://github.com/stigdreyer/signalk-mikrotik/security/advisories/new
+    about: Please report privately, not as an issue (see SECURITY.md).
