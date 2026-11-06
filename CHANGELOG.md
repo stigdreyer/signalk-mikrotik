@@ -13,6 +13,8 @@ Versions before 1.0.0 were development releases; each links to its commit.
   tests.
 
 ### Added
+- The Appstore lists signalk-internet under **Requires**, and signalk-starlink-offshore, signalk-starlink,
+  signalk-derived-data and Freeboard-SK under **Works well with**.
 - Signal K's shared plugin CI, which tests every change on Linux, macOS and Windows with Node 22, 24 and 26.
 
 ## [1.0.0] - 2026-11-06

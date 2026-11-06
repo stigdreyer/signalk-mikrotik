@@ -1,7 +1,7 @@
 {
   "name": "signalk-mikrotik",
   "version": "1.0.1",
-  "description": "Signal K plugin that locks a MikroTik router down to an allowlist while the internet connection is metered, and shows data usage",
+  "description": "Meters the boat's data on a MikroTik router and, while the connection is metered, locks the router down to an allowlist",
   "main": "index.js",
   "license": "EUPL-1.2",
   "author": "Stig Dreyer",
@@ -41,6 +41,15 @@
   "signalk": {
     "displayName": "MikroTik Data Meter",
     "appIcon": "./assets/icons/icon-72x72.png",
+    "requires": [
+      "@meri-imperiumi/signalk-internet"
+    ],
+    "recommends": [
+      "signalk-starlink-offshore",
+      "signalk-starlink",
+      "signalk-derived-data",
+      "@signalk/freeboard-sk"
+    ],
     "screenshots": [
       "./docs/screenshots/allowlist.png",
       "./docs/screenshots/data-usage.png",
